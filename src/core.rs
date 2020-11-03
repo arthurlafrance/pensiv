@@ -15,6 +15,10 @@ impl Dimensions {
     pub fn count(&self) -> usize {
         self.axes.len()
     }
+
+    pub fn iter(&self) -> DimIterator {
+        DimIterator::new(&self)
+    }
 }
 
 
@@ -41,6 +45,39 @@ impl fmt::Display for Dimensions {
     }
 }
 
+pub struct DimIterator<'a> {
+    dimensions: &'a Dimensions,
+    index: usize
+}
+
+impl<'a> DimIterator<'a> {
+    pub fn new(dimensions: &'a Dimensions) -> DimIterator {
+        DimIterator {
+            dimensions,
+            index: 0
+        }
+    }
+
+    fn dim(&self) -> u32 {
+        self.dimensions[self.index]
+    }
+}
+
+impl<'a> iter::Iterator for DimIterator<'a> {
+    type Item = u32;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.index < self.dimensions.count() {
+            let dim = self.dim();
+            self.index += 1;
+
+            return Some(dim)
+        }
+        
+        return None
+    }
+}
+
 
 #[macro_export]
 macro_rules! dim {
@@ -48,6 +85,7 @@ macro_rules! dim {
         {
             use crate::core;
             let mut axes = Vec::new();
+
             $( 
                 axes.push($axis); 
             )*
@@ -107,5 +145,17 @@ mod tests {
         let dim_str = format!("{}", d);
         
         assert_eq!(dim_str, expected);
+    }
+
+    #[test]
+    fn dim_iter_sanitycheck() {
+        let dims = dim![1, 2, 3];
+        let expected = vec![1, 2, 3];
+        let mut i = 0;
+
+        for dim in dims.iter() {
+            assert_eq!(dim, expected[i]);
+            i += 1;
+        }
     }
 }
