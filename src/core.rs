@@ -107,12 +107,19 @@ pub struct Array<Element> {
 }
 
 impl<Element> Array<Element> {
-    // pub fn new(shape: Dimensions) -> Array<Element> {
-        // need dimensions iterator
+    pub fn new(elem: Element, shape: Dimensions) -> Array<Element> {
         // for each dimension:
             // if this is last dimension, make OneDim
-            // else, make vector of smaller array contents
-    // }
+            // else, make vector of smaller array contents for each vector in previous axis
+    }
+
+    pub fn zeros(shape: Dimensions) -> Array<Element> {
+        Array<Element>::new(0, shape)
+    }
+
+    pub fn ones(shape: Dimensions) -> Array<Element> {
+        Array<Element>::new(1, shape)
+    }
 }
 
 
