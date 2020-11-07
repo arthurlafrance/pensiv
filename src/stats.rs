@@ -33,6 +33,14 @@ impl DiscreteUniformDist {
     pub fn range(&self) -> i32 {
         self.upper_bound - self.lower_bound
     }
+
+    pub fn upper_bound(&self) -> i32 {
+        self.upper_bound
+    }
+
+    pub fn lower_bound(&self) -> i32 {
+        self.lower_bound
+    }
 }
 
 impl DiscreteDist<i32> for DiscreteUniformDist {
@@ -63,6 +71,59 @@ impl DiscreteDist<i32> for DiscreteUniformDist {
 
     fn variance(&self) -> f64 {
         (((self.upper_bound - self.upper_bound + 1) * (self.upper_bound - self.upper_bound + 1)) as f64 - 1.0) / 12.0
+    }
+}
+
+
+struct BernoulliDist {
+    success_prob: f64,
+}
+
+impl BernoulliDist {
+    pub fn new(success_prob: f64) -> BernoulliDist {
+        if success_prob < 0.0 || success_prob > 1.0 {
+            panic!("Bernoulli probability of success must be between 0 and 1");
+        }
+
+        BernoulliDist { success_prob }
+    }
+
+    pub fn success_prob(&self) -> f64 {
+        self.success_prob
+    }
+}
+
+impl DiscreteDist<i32> for BernoulliDist {
+    fn pmf(&self, value: i32) -> f64 {
+        if value == 0 {
+            return 1.0 - self.success_prob;
+        }
+        else if value == 1 {
+            return self.success_prob;
+        }
+        else {
+            return 0.0;
+        }
+    }
+
+    fn cdf(&self, value: i32) -> f64 {
+        if value < 0 {
+            return 0.0;
+        }
+        else if value == 0 {
+            return 1.0 - self.success_prob;
+        }
+        else {
+            return 1.0;
+        }
+    }
+
+    fn mean(&self) -> f64 {
+        self.success_prob
+    }
+
+    fn variance(&self) -> f64 {
+        self.success_prob * (1.0 - self.success_prob)
     }
 }
 
