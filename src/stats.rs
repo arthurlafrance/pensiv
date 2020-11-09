@@ -219,6 +219,51 @@ impl DiscreteDist<i32> for BinomDist {
 }
 
 
+struct GeometricDist {
+    p_success: f64,
+}
+
+impl GeometricDist {
+    pub fn new(p_success: f64) -> GeometricDist {
+        if p_success < 0.0 || p_success > 1.0 {
+            panic!("Geometric probability of success must be between 0 and 1");
+        }
+
+        GeometricDist { p_success }
+    }
+
+    pub fn p_success(&self) -> f64 {
+        self.p_success
+    }
+
+    pub fn p_failure(&self) -> f64 {
+        1.0 - self.p_success
+    }
+}
+
+impl DiscreteDist<i32> for GeometricDist {
+    fn pmf(&self, value: i32) -> f64 {
+        self.p_success * self.p_failure().powi(value - 1)
+    }
+
+    fn cdf(&self, value: i32) -> f64 {
+        1.0 - self.p_failure.powi(value)
+    }
+
+    fn interval_cdf(&self, lower_bound: i32, upper_bound: i32) -> f64 {
+        self.cdf(upper_bound) - self.cdf(lower_bound)
+    }
+
+    fn mean(&self) -> f64 {
+        1.0 / self.p_success
+    }
+
+    fn variance(&self) -> f64 {
+        self.p_failure / self.p_success.powi(2)
+    }
+}
+
+
 #[cfg(test)]
 mod tests {
     // TODO: add tests
