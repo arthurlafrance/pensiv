@@ -1,3 +1,27 @@
+
+pub fn factorial(n: i32) -> i32 {
+    if n < 0 {
+        return 0;
+    }
+    else if n == 0 {
+        return 1;
+    }
+    else {
+        return n * factorial(n - 1);
+    }
+}
+
+
+pub fn permutations(n: i32, k: i32) -> i32 {
+    factorial(n) / factorial(n - k)
+}
+
+
+pub fn choose(n: i32, k: i32) -> i32 {
+    factorial(n) / (factorial(n - k) * factorial(k))
+}
+
+
 /// Base trait for all discrete distributions
 pub trait DiscreteDist<Value> { // TODO: bound generic type to numerics
     fn pmf(&self, value: Value) -> f64;
@@ -76,30 +100,30 @@ impl DiscreteDist<i32> for DiscreteUniformDist {
 
 
 struct BernoulliDist {
-    success_prob: f64,
+    p_success: f64,
 }
 
 impl BernoulliDist {
-    pub fn new(success_prob: f64) -> BernoulliDist {
-        if success_prob < 0.0 || success_prob > 1.0 {
+    pub fn new(p_success: f64) -> BernoulliDist {
+        if p_success < 0.0 || p_success > 1.0 {
             panic!("Bernoulli probability of success must be between 0 and 1");
         }
 
-        BernoulliDist { success_prob }
+        BernoulliDist { p_success }
     }
 
-    pub fn success_prob(&self) -> f64 {
-        self.success_prob
+    pub fn p_success(&self) -> f64 {
+        self.p_success
     }
 }
 
 impl DiscreteDist<i32> for BernoulliDist {
     fn pmf(&self, value: i32) -> f64 {
         if value == 0 {
-            return 1.0 - self.success_prob;
+            return 1.0 - self.p_success;
         }
         else if value == 1 {
-            return self.success_prob;
+            return self.p_success;
         }
         else {
             return 0.0;
@@ -111,7 +135,7 @@ impl DiscreteDist<i32> for BernoulliDist {
             return 0.0;
         }
         else if value == 0 {
-            return 1.0 - self.success_prob;
+            return 1.0 - self.p_success;
         }
         else {
             return 1.0;
@@ -119,16 +143,73 @@ impl DiscreteDist<i32> for BernoulliDist {
     }
 
     fn mean(&self) -> f64 {
-        self.success_prob
+        self.p_success
     }
 
     fn variance(&self) -> f64 {
-        self.success_prob * (1.0 - self.success_prob)
+        self.p_success * (1.0 - self.p_success)
+    }
+}
+
+
+struct BinomDist {
+    p_success: f64,
+    trials: i32,
+}
+
+impl BinomDist {
+    pub fn new(p_success: f64, trials: i32) -> BinomDist {
+        if p_success < 0.0 || p_success > 1.0 {
+            panic!("Binomial probability of success must be between 0 and 1");
+        }
+
+        if trials < 0 {
+            panic!("Binomial number of trials must be non-negative");
+        }
+
+        BinomDist { p_success, trials }
+    }
+
+    pub fn p_success(&self) -> f64 {
+        self.p_success
+    }
+
+    pub fn p_failure(&self) -> f64 {
+        1.0 - self.p_success
+    }
+
+    pub fn trials(&self) -> i32 {
+        self.trials
+    }
+}
+
+impl DiscreteDist<i32> for BinomDist {
+    fn pmf(&self, value: i32) -> f64 {
+        choose(self.trials, value) as f64 * self.p_success.powi(value) * self.p_failure().powi(self.trials - value)
+    }
+
+    fn cdf(&self, value: i32) -> f64 {
+        // TODO: vectorize with ndarray
+        let mut cdf_value = 0.0;
+
+        for n in 0..(value + 1) {
+            cdf_value += self.pmf(value);
+        }
+
+        cdf_value
+    }
+
+    fn mean(&self) -> f64 {
+        self.trials as f64 * self.p_success
+    }
+
+    fn variance(&self) -> f64 {
+        self.trials as f64 * self.p_success * (1.0 - self.p_success)
     }
 }
 
 
 #[cfg(test)]
 mod tests {
-    // TODO: add discrete uniform dist tests
+    // TODO: add tests
 }
