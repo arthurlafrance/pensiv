@@ -193,7 +193,17 @@ impl DiscreteDist<i32> for BinomDist {
         let mut cdf_value = 0.0;
 
         for n in 0..(value + 1) {
-            cdf_value += self.pmf(value);
+            cdf_value += self.pmf(n);
+        }
+
+        cdf_value
+    }
+
+    fn interval_cdf(&self, lower_bound: Value, upper_bound: Value) -> f64 {
+        let mut cdf_value = 0.0;
+
+        for n in lower_bound..(upper_bound + 1) {
+            cdf_value += self.pmf(n);
         }
 
         cdf_value
