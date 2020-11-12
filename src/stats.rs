@@ -1,3 +1,10 @@
+use ndarray::prelude::*;
+use ndarray::Array;
+
+use std::collections::BTreeMap;
+
+use crate::utils::ComparableFloat;
+
 
 pub fn factorial(n: i32) -> i32 {
     if n < 0 {
@@ -199,7 +206,7 @@ impl DiscreteDist<i32> for BinomDist {
         cdf_value
     }
 
-    fn interval_cdf(&self, lower_bound: Value, upper_bound: Value) -> f64 {
+    fn interval_cdf(&self, lower_bound: i32, upper_bound: i32) -> f64 {
         let mut cdf_value = 0.0;
 
         for n in lower_bound..(upper_bound + 1) {
@@ -247,7 +254,7 @@ impl DiscreteDist<i32> for GeometricDist {
     }
 
     fn cdf(&self, value: i32) -> f64 {
-        1.0 - self.p_failure.powi(value)
+        1.0 - self.p_failure().powi(value)
     }
 
     fn interval_cdf(&self, lower_bound: i32, upper_bound: i32) -> f64 {
@@ -259,7 +266,94 @@ impl DiscreteDist<i32> for GeometricDist {
     }
 
     fn variance(&self) -> f64 {
-        self.p_failure / self.p_success.powi(2)
+        self.p_failure() / self.p_success.powi(2)
+    }
+}
+
+
+struct EmpiricalDist {
+    // NOTE: if this dist is immutable, should cache stats directly
+    //       on the other hand, if it's mutable, should add mutating methods
+    counts: BTreeMap<ComparableFloat, i32>,
+    data: Array<f64, Ix1>,
+    data_len: usize,
+}
+
+impl EmpiricalDist {
+    pub fn new(data: Array<f64, Ix1>) -> EmpiricalDist {
+        let mut counts = BTreeMap::<ComparableFloat, i32>::new();
+
+        for elem in data.iter() {
+            match ComparableFloat::new(*elem) {
+                Some(f) => {
+                    if !counts.contains_key(&f) {
+                        counts.insert(f, 0);
+                    }
+
+                    counts.insert(f, counts[&f] + 1);
+                },
+                None => panic!("Encountered NaN in empirical distribution dataset")
+            }
+        }
+
+        let data_len = data.len();
+
+        EmpiricalDist { counts, data, data_len }
+    }
+
+    pub fn data(&self) -> &Array<f64, Ix1> {
+        &self.data
+    }
+}
+
+impl DiscreteDist<f64> for EmpiricalDist {
+    fn pmf(&self, value: f64) -> f64 {
+        match ComparableFloat::new(value) {
+            Some(f) => {
+                self.counts[&f] as f64 / self.data_len as f64
+            },
+            None => panic!("Encountered NaN in empirical distribution PMF")
+        }
+    }
+
+    fn cdf(&self, value: f64) -> f64 {
+        let mut cdf = 0.0;
+
+        for key in self.counts.keys() {
+            if key.value() <= value {
+                cdf += self.counts[key] as f64;
+            }
+            else {
+                break;
+            }
+        }
+
+        cdf / self.data_len as f64
+    }
+
+    fn interval_cdf(&self, lower_bound: f64, upper_bound: f64) -> f64 {
+        let mut cdf = 0.0;
+
+        for key in self.counts.keys() {
+            if key.value() >= lower_bound && key.value() <= upper_bound {
+                cdf += self.counts[key] as f64;
+            }
+            else if key.value() > upper_bound {
+                break;
+            }
+        }
+
+        cdf / self.data_len as f64
+    }
+
+    fn mean(&self) -> f64 {
+        self.data.mean().unwrap_or(0.0)
+    }
+
+    fn variance(&self) -> f64 {
+        let data_squared = &self.data * &self.data;
+
+        data_squared.mean().unwrap_or(0.0) - self.mean().powi(2)
     }
 }
 
