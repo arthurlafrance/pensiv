@@ -30,11 +30,11 @@ pub fn choose(n: i32, k: i32) -> i32 {
 
 
 /// Base trait for all discrete distributions
-pub trait DiscreteDist<Value> { // TODO: bound generic type to numerics
-    fn pmf(&self, value: Value) -> f64;
-    fn cdf(&self, value: Value) -> f64;
+pub trait DiscreteDist<N> { // TODO: bound generic type to numerics
+    fn pmf(&self, value: N) -> f64;
+    fn cdf(&self, value: N) -> f64;
 
-    fn interval_cdf(&self, lower_bound: Value, upper_bound: Value) -> f64 {
+    fn interval_cdf(&self, lower_bound: N, upper_bound: N) -> f64 {
         self.cdf(upper_bound) - self.cdf(lower_bound)
     }
 
@@ -354,6 +354,80 @@ impl DiscreteDist<f64> for EmpiricalDist {
         let data_squared = &self.data * &self.data;
 
         data_squared.mean().unwrap_or(0.0) - self.mean().powi(2)
+    }
+}
+
+
+pub trait ContinuousDist<N> { // TODO: bound generic type to numerics
+    fn pdf(&self, value: N) -> f64;
+    fn cdf(&self, value: N) -> f64;
+
+    fn interval_cdf(&self, lower_bound: N, upper_bound: N) -> f64 {
+        self.cdf(upper_bound) - self.cdf(lower_bound)
+    }
+
+    fn mean(&self) -> f64;
+    fn variance(&self) -> f64;
+
+    fn std_dev(&self) -> f64 {
+        self.variance().sqrt()
+    }
+}
+
+
+pub struct ContinuousUniformDist {
+    lower_bound: f64,
+    upper_bound: f64,
+}
+
+impl ContinuousUniformDist {
+    pub fn new(lower_bound: f64, upper_bound: f64) -> ContinuousUniformDist {
+        ContinuousUniformDist { lower_bound, upper_bound }
+    }
+
+    pub fn lower_bound(&self) -> f64 {
+        self.lower_bound
+    }
+
+    pub fn upper_bound(&self) -> f64 {
+        self.upper_bound
+    }
+
+    pub fn range(&self) -> f64 {
+        self.upper_bound - self.lower_bound
+    }
+}
+
+impl ContinuousDist<f64> for ContinuousUniformDist {
+    fn pdf(&self, value: f64) -> f64 {
+        if value >= self.lower_bound && value <= self.upper_bound {
+            return 1.0 / self.range();
+        }
+        else {
+            return 0.0;
+        }
+    }
+
+    fn cdf(&self, value: f64) -> f64 {
+        if value >= self.lower_bound && value <= self.upper_bound {
+            return (value - self.lower_bound) / self.range();
+        }
+        else if value < self.lower_bound {
+            return 0.0;
+        }
+        else {
+            return 1.0;
+        }
+    }
+
+    // TODO: better interval cdf
+
+    fn mean(&self) -> f64 {
+        (self.lower_bound + self.upper_bound) / 2.0
+    }
+
+    fn variance(&self) -> f64 {
+        (self.upper_bound - self.lower_bound) / 12.0_f64.sqrt()
     }
 }
 
