@@ -41,7 +41,7 @@ pub trait DiscreteDist<N> { // TODO: bound generic type to numerics
     fn mean(&self) -> f64;
     fn variance(&self) -> f64;
 
-    fn std_dev(&self) -> f64 {
+    fn std(&self) -> f64 {
         self.variance().sqrt()
     }
 }
@@ -369,7 +369,7 @@ pub trait ContinuousDist<N> { // TODO: bound generic type to numerics
     fn mean(&self) -> f64;
     fn variance(&self) -> f64;
 
-    fn std_dev(&self) -> f64 {
+    fn std(&self) -> f64 {
         self.variance().sqrt()
     }
 }
@@ -382,6 +382,10 @@ pub struct ContinuousUniformDist {
 
 impl ContinuousUniformDist {
     pub fn new(lower_bound: f64, upper_bound: f64) -> ContinuousUniformDist {
+        if lower_bound > upper_bound {
+            panic!("Continuous uniform distribution lower bound must not be greater than upper bound");
+        }
+
         ContinuousUniformDist { lower_bound, upper_bound }
     }
 
@@ -428,6 +432,43 @@ impl ContinuousDist<f64> for ContinuousUniformDist {
 
     fn variance(&self) -> f64 {
         (self.upper_bound - self.lower_bound) / 12.0_f64.sqrt()
+    }
+}
+
+
+struct ExponentialDist {
+    rate_param: f64
+}
+
+impl ExponentialDist {
+    pub fn new(rate_param: f64) -> ExponentialDist {
+        if rate_param <= 0.0 {
+            panic!("Rate parameter of exponential distribution must be positive");
+        }
+
+        ExponentialDist { rate_param }
+    }
+
+    pub fn rate_param(&self) -> f64 {
+        self.rate_param
+    }
+}
+
+impl ContinuousDist<f64> for ExponentialDist {
+    fn pdf(&self, value: f64) -> f64 {
+        self.rate_param * (-self.rate_param * value).exp()
+    }
+
+    fn cdf(&self, value: f64) -> f64 {
+        1.0 - (-self.rate_param * value).exp()
+    }
+
+    fn mean(&self) -> f64 {
+        1.0 / self.rate_param
+    }
+
+    fn variance(&self) -> f64 {
+        1.0 / self.rate_param.powi(2)
     }
 }
 
