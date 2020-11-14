@@ -2,6 +2,7 @@ use ndarray::prelude::*;
 use ndarray::Array;
 
 use std::collections::BTreeMap;
+use std::f64::consts::PI;
 
 use crate::utils::ComparableFloat;
 
@@ -469,6 +470,66 @@ impl ContinuousDist<f64> for ExponentialDist {
 
     fn variance(&self) -> f64 {
         1.0 / self.rate_param.powi(2)
+    }
+}
+
+
+struct NormalDist {
+    // NOTE: distributions parameters are so named to reflect their conceptual purpose, rather than their relevance to 
+    // the properties of the distribution
+    loc: f64,
+    scale: f64,
+}
+
+impl NormalDist {
+    pub fn new(loc: f64, scale: f64) -> NormalDist {
+        if scale < 0.0 {
+            panic!("Normal distribution scale can't be negative");
+        }
+
+        NormalDist { loc, scale }
+    }
+
+    pub fn std() -> NormalDist {
+        NormalDist { loc: 0.0, scale: 1.0 }
+    }
+
+    pub fn loc(&self) -> f64 {
+        self.loc
+    }
+
+    pub fn scale(&self) -> f64 {
+        self.scale
+    }
+
+    pub fn z(&self, value: f64) -> f64 {
+        (value - self.loc) / self.scale
+    }
+}
+
+impl ContinuousDist<f64> for NormalDist {
+    fn pdf(&self, value: f64) -> f64 {
+        let t1 = 1.0 / (2.0 * PI).sqrt() * self.scale;
+        let t2 = -1.0 * (value - self.loc).powi(2) / (2.0 * self.variance());
+
+        t1 * t2.exp()
+    }
+
+    fn cdf(&self, value: f64) -> f64 {
+        // NOTE: this approximation is currently somewhat naive, will be improved in the future
+        1.0 / (1.0 + (-1.65451 * value).exp())
+    }
+
+    fn mean(&self) -> f64 {
+        self.loc
+    }
+
+    fn variance(&self) -> f64 {
+        self.scale.powi(2)
+    }
+
+    fn std(&self) -> f64 {
+        self.scale
     }
 }
 
