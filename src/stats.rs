@@ -197,24 +197,15 @@ impl DiscreteDist<i32> for BinomDist {
     }
 
     fn cdf(&self, value: i32) -> f64 {
-        // TODO: vectorize with ndarray
-        let mut cdf_value = 0.0;
-
-        for n in 0..(value + 1) {
-            cdf_value += self.pmf(n);
-        }
-
-        cdf_value
+        let mut cdf_values = Array::range(0.0, value as f64 + 1.0, 1.0);
+        cdf_values.map_inplace(|&mut n| { self.pmf(n as i32); }); // avoid using map because that allocates another array
+        cdf_values.sum()
     }
 
     fn interval_cdf(&self, lower_bound: i32, upper_bound: i32) -> f64 {
-        let mut cdf_value = 0.0;
-
-        for n in lower_bound..(upper_bound + 1) {
-            cdf_value += self.pmf(n);
-        }
-
-        cdf_value
+        let mut cdf_values = Array::range(lower_bound as f64, upper_bound as f64 + 1.0, 1.0);
+        cdf_values.map_inplace(|&mut n| { self.pmf(n as i32); }); // avoid using map because that allocates another array
+        cdf_values.sum()
     }
 
     fn mean(&self) -> f64 {
@@ -256,10 +247,6 @@ impl DiscreteDist<i32> for GeometricDist {
 
     fn cdf(&self, value: i32) -> f64 {
         1.0 - self.p_failure().powi(value)
-    }
-
-    fn interval_cdf(&self, lower_bound: i32, upper_bound: i32) -> f64 {
-        self.cdf(upper_bound) - self.cdf(lower_bound)
     }
 
     fn mean(&self) -> f64 {
