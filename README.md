@@ -14,10 +14,10 @@ In order to use `pensiv` as a Cargo dependency, include it in your `Cargo.toml` 
 # ...
 
 [dependencies]
-pensiv = "0.0.1"
+pensiv = { git = "https://github.com/arthurlafrance/pensiv" )
 ```
 
-Note that `pensiv` is currently not published to cargo, so the above statement won't technically apply until that happens. Also worth noting is that a "quickstart guide"-style tutorial will be available once the crate is published and ready for use.
+Note that `pensiv` is currently not published to `crates.io`, so the above statement will essentially become obsolete when that happens. Also worth noting is that  documentation of the crate will be available once it's published and ready for use.
 
 ## Contributing
 As with the previous section, `pensiv` is by no means mature, and is currently mostly a place for my personal experimentation. That said, those so inclined are welcome to use this code for their own personal experimentation. Note that any pull requests that are submitted will be accepeted at my discretion. Also note that I encourage anyone who finds issues with the crate to open an issue to let me know about it; I'm always looking to improve the quality of my code and my coding skills, and that's an important step toward this goal.
