@@ -48,6 +48,7 @@ pub trait DiscreteDist<N> { // TODO: bound generic type to numerics
 }
 
 
+#[derive(Debug, PartialEq)]
 pub struct DiscreteUniformDist {
     lower_bound: i32,
     upper_bound: i32
@@ -107,6 +108,7 @@ impl DiscreteDist<i32> for DiscreteUniformDist {
 }
 
 
+#[derive(Debug, PartialEq)]
 struct BernoulliDist {
     p_success: f64,
 }
@@ -160,6 +162,7 @@ impl DiscreteDist<i32> for BernoulliDist {
 }
 
 
+#[derive(Debug, PartialEq)]
 struct BinomDist {
     p_success: f64,
     trials: i32,
@@ -198,13 +201,13 @@ impl DiscreteDist<i32> for BinomDist {
 
     fn cdf(&self, value: i32) -> f64 {
         let mut cdf_values = Array::range(0.0, value as f64 + 1.0, 1.0);
-        cdf_values.map_inplace(|&mut n| { self.pmf(n as i32); }); // avoid using map because that allocates another array
+        cdf_values.mapv_inplace(|n| { self.pmf(n as i32) }); // avoid using map because that allocates another array
         cdf_values.sum()
     }
 
     fn interval_cdf(&self, lower_bound: i32, upper_bound: i32) -> f64 {
         let mut cdf_values = Array::range(lower_bound as f64, upper_bound as f64 + 1.0, 1.0);
-        cdf_values.map_inplace(|&mut n| { self.pmf(n as i32); }); // avoid using map because that allocates another array
+        cdf_values.mapv_inplace(|n| { self.pmf(n as i32) }); // avoid using map because that allocates another array
         cdf_values.sum()
     }
 
@@ -218,6 +221,7 @@ impl DiscreteDist<i32> for BinomDist {
 }
 
 
+#[derive(Debug, PartialEq)]
 struct GeometricDist {
     p_success: f64,
 }
@@ -259,6 +263,7 @@ impl DiscreteDist<i32> for GeometricDist {
 }
 
 
+#[derive(Debug)]
 struct EmpiricalDist {
     // NOTE: if this dist is immutable, should cache stats directly
     //       on the other hand, if it's mutable, should add mutating methods
@@ -363,6 +368,7 @@ pub trait ContinuousDist<N> { // TODO: bound generic type to numerics
 }
 
 
+#[derive(Debug, PartialEq)]
 pub struct ContinuousUniformDist {
     lower_bound: f64,
     upper_bound: f64,
@@ -424,6 +430,7 @@ impl ContinuousDist<f64> for ContinuousUniformDist {
 }
 
 
+#[derive(Debug, PartialEq)]
 struct ExponentialDist {
     rate_param: f64
 }
@@ -461,6 +468,7 @@ impl ContinuousDist<f64> for ExponentialDist {
 }
 
 
+#[derive(Debug, PartialEq)]
 struct NormalDist {
     // NOTE: distributions parameters are so named to reflect their conceptual purpose, rather than their relevance to 
     // the properties of the distribution
@@ -523,5 +531,161 @@ impl ContinuousDist<f64> for NormalDist {
 
 #[cfg(test)]
 mod tests {
-    // TODO: add tests
+    use super::*;
+    use ndarray::prelude::*;
+    use ndarray::Array;
+
+    #[test]
+    fn discrete_uniform_dist_created_correctly() {
+        let dist = DiscreteUniformDist::new(0, 4).unwrap(); // panics if creation fails
+        
+        assert_eq!(dist.lower_bound(), 0);
+        assert_eq!(dist.upper_bound(), 4);
+        assert_eq!(dist.range(), 4);
+    }
+
+    #[test]
+    fn discrete_uniform_dist_invalid_creation_fails() {
+        let dist = DiscreteUniformDist::new(4, 0);
+        assert_eq!(dist, None);
+    }
+            
+    #[test]
+    fn discrete_uniform_dist_gives_correct_pdf_inrange() {
+        let lower_bound = 0;
+        let upper_bound = 4;
+
+        let dist = DiscreteUniformDist::new(lower_bound, upper_bound).unwrap();
+
+        let mut values = Array::range(lower_bound as f64, upper_bound as f64 + 1.0, 1.0);
+        values.mapv_inplace(|n| { dist.pmf(n as i32) });
+
+        assert!(values.iter().all(|&p| p == 1.0 / dist.range() as f64));
+    }
+
+    #[test]
+    fn discrete_uniform_dist_gives_correct_pdf_outofrange() {
+        let lower_bound = 0;
+        let upper_bound = 4;
+
+        let dist = DiscreteUniformDist::new(lower_bound, upper_bound).unwrap();
+
+        assert_eq!(dist.pmf(lower_bound - 1), 0.0);
+        assert_eq!(dist.pmf(upper_bound + 1), 0.0);
+    }
+
+    #[test]
+    fn discrete_uniform_dist_correct_cdf_outofrange() {
+        let lower_bound = 0;
+        let upper_bound = 4;
+
+        let dist = DiscreteUniformDist::new(lower_bound, upper_bound).unwrap();
+
+        assert_eq!(dist.cdf(lower_bound - 1), 0.0);
+        assert_eq!(dist.cdf(upper_bound + 1), 1.0);
+    }
+
+    #[test]
+    fn discrete_uniform_dist_correct_cdf_withinrange() {
+        let lower_bound = 1;
+        let upper_bound = 5;
+
+        let dist = DiscreteUniformDist::new(lower_bound, upper_bound).unwrap();
+
+        let values = Array::range(lower_bound as f64, upper_bound as f64 + 1.0, 1.0);
+        let correct_cdf = values.mapv(|n| n as f64 / dist.range() as f64);
+        let cdf = values.mapv(|n| dist.cdf(n as i32));
+
+        assert_eq!(cdf, correct_cdf);
+    }
+
+    #[test]
+    fn discrete_uniform_dist_correct_inverval_cdf() {
+        let lower_bound = 1;
+        let upper_bound = 5;
+
+        let dist = DiscreteUniformDist::new(lower_bound, upper_bound).unwrap();
+
+        assert_eq!(dist.interval_cdf(lower_bound + 1, upper_bound - 1), (dist.range() - 2) as f64 / dist.range() as f64);
+    }
+
+    #[test]
+    fn discrete_uniform_dist_mean_calculated_correctly() {
+        let lower_bound = 1;
+        let upper_bound = 5;
+
+        let dist = DiscreteUniformDist::new(lower_bound, upper_bound).unwrap();
+
+        assert_eq!(dist.mean(), (upper_bound + lower_bound) as f64 / 2.0);
+    }
+
+        // variance (i'm literally just gonna plug in a formula but ok then)
+
+        // std (again literally just gonna plug in a formula so idk if it's worth testing)
+    // Bernoulli
+        // new
+            // good
+            // bad p
+        // pmf
+        // cdf
+        // interval_cdf
+        // mean
+        // variance
+        // std
+    // Binom
+        // new
+            // good
+            // bad p
+            // bad trials
+        // pmf
+        // cdf
+        // interval_cdf
+        // mean
+        // variance
+        // std
+    // Geometric
+        // new
+            // good
+            // bad p
+        // pmf
+        // cdf
+        // interval_cdf
+        // mean
+        // variance
+        // std
+    // Empirical
+        // new
+            // good
+            // bad float
+        // pmf
+        // cdf
+        // interval_cdf
+        // mean
+        // variance
+        // std
+
+    /*
+    fn pdf(&self, value: N) -> f64;
+    fn cdf(&self, value: N) -> f64;
+    fn interval_cdf(&self, lower_bound: N, upper_bound: N) -> f64;
+
+    fn mean(&self) -> f64;
+    fn variance(&self) -> f64;
+    fn std(&self) -> f64;
+    */
+
+    // ContinuousUniform
+        // new
+            // good
+            // bad bounds
+    // Exponential
+        // new
+            // good
+            // bad rate param
+    // Normal
+        // new
+            // good
+            // bad scale
+        // std
+        // z
 }
