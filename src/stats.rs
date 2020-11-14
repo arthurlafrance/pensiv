@@ -54,12 +54,12 @@ pub struct DiscreteUniformDist {
 }
 
 impl DiscreteUniformDist {
-    pub fn new(lower_bound: i32, upper_bound: i32) -> DiscreteUniformDist {
+    pub fn new(lower_bound: i32, upper_bound: i32) -> Option<DiscreteUniformDist> {
         if lower_bound > upper_bound {
-            panic!("Upper bound of discrete uniform distribution can't be less than lower bound");
+            return None;
         }
 
-        DiscreteUniformDist { lower_bound, upper_bound }
+        Some(DiscreteUniformDist { lower_bound, upper_bound })
     }
 
     pub fn range(&self) -> i32 {
@@ -112,12 +112,12 @@ struct BernoulliDist {
 }
 
 impl BernoulliDist {
-    pub fn new(p_success: f64) -> BernoulliDist {
+    pub fn new(p_success: f64) -> Option<BernoulliDist> {
         if p_success < 0.0 || p_success > 1.0 {
-            panic!("Bernoulli probability of success must be between 0 and 1");
+            return None;
         }
 
-        BernoulliDist { p_success }
+        Some(BernoulliDist { p_success })
     }
 
     pub fn p_success(&self) -> f64 {
@@ -166,16 +166,16 @@ struct BinomDist {
 }
 
 impl BinomDist {
-    pub fn new(p_success: f64, trials: i32) -> BinomDist {
+    pub fn new(p_success: f64, trials: i32) -> Option<BinomDist> {
         if p_success < 0.0 || p_success > 1.0 {
-            panic!("Binomial probability of success must be between 0 and 1");
+            return None;
         }
 
         if trials < 0 {
-            panic!("Binomial number of trials must be non-negative");
+            return None;
         }
 
-        BinomDist { p_success, trials }
+        Some(BinomDist { p_success, trials })
     }
 
     pub fn p_success(&self) -> f64 {
@@ -232,12 +232,12 @@ struct GeometricDist {
 }
 
 impl GeometricDist {
-    pub fn new(p_success: f64) -> GeometricDist {
+    pub fn new(p_success: f64) -> Option<GeometricDist> {
         if p_success < 0.0 || p_success > 1.0 {
-            panic!("Geometric probability of success must be between 0 and 1");
+            return None;
         }
 
-        GeometricDist { p_success }
+        Some(GeometricDist { p_success })
     }
 
     pub fn p_success(&self) -> f64 {
@@ -281,7 +281,7 @@ struct EmpiricalDist {
 }
 
 impl EmpiricalDist {
-    pub fn new(data: Array<f64, Ix1>) -> EmpiricalDist {
+    pub fn new(data: Array<f64, Ix1>) -> Option<EmpiricalDist> {
         let mut counts = BTreeMap::<ComparableFloat, i32>::new();
 
         for elem in data.iter() {
@@ -293,13 +293,13 @@ impl EmpiricalDist {
 
                     counts.insert(f, counts[&f] + 1);
                 },
-                None => panic!("Encountered NaN in empirical distribution dataset")
+                None => return None,
             }
         }
 
         let data_len = data.len();
 
-        EmpiricalDist { counts, data, data_len }
+        Some(EmpiricalDist { counts, data, data_len })
     }
 
     pub fn data(&self) -> &Array<f64, Ix1> {
@@ -313,7 +313,7 @@ impl DiscreteDist<f64> for EmpiricalDist {
             Some(f) => {
                 self.counts[&f] as f64 / self.data_len as f64
             },
-            None => panic!("Encountered NaN in empirical distribution PMF")
+            None => panic!("Encountered NaN in empirical distribution PMF") // NOTE: needs review
         }
     }
 
@@ -382,12 +382,12 @@ pub struct ContinuousUniformDist {
 }
 
 impl ContinuousUniformDist {
-    pub fn new(lower_bound: f64, upper_bound: f64) -> ContinuousUniformDist {
+    pub fn new(lower_bound: f64, upper_bound: f64) -> Option<ContinuousUniformDist> {
         if lower_bound > upper_bound {
-            panic!("Continuous uniform distribution lower bound must not be greater than upper bound");
+            return None;
         }
 
-        ContinuousUniformDist { lower_bound, upper_bound }
+        Some(ContinuousUniformDist { lower_bound, upper_bound })
     }
 
     pub fn lower_bound(&self) -> f64 {
@@ -442,12 +442,12 @@ struct ExponentialDist {
 }
 
 impl ExponentialDist {
-    pub fn new(rate_param: f64) -> ExponentialDist {
+    pub fn new(rate_param: f64) -> Option<ExponentialDist> {
         if rate_param <= 0.0 {
-            panic!("Rate parameter of exponential distribution must be positive");
+            return None;
         }
 
-        ExponentialDist { rate_param }
+        Some(ExponentialDist { rate_param })
     }
 
     pub fn rate_param(&self) -> f64 {
@@ -482,12 +482,12 @@ struct NormalDist {
 }
 
 impl NormalDist {
-    pub fn new(loc: f64, scale: f64) -> NormalDist {
+    pub fn new(loc: f64, scale: f64) -> Option<NormalDist> {
         if scale < 0.0 {
-            panic!("Normal distribution scale can't be negative");
+            return None;
         }
 
-        NormalDist { loc, scale }
+        Some(NormalDist { loc, scale })
     }
 
     pub fn std() -> NormalDist {
