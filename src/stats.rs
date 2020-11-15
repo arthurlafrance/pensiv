@@ -1,6 +1,9 @@
 use ndarray::prelude::*;
 use ndarray::Array;
 
+use num_traits::Num;
+use num_traits::identities;
+
 use std::collections::BTreeMap;
 use std::f64::consts::PI;
 
@@ -36,12 +39,12 @@ pub fn choose(n: i32, k: i32) -> i32 {
 
 
 /// Base trait for all discrete distributions
-pub trait DiscreteDist<N> { // TODO: bound generic type to numerics
+pub trait DiscreteDist<N: Num> { // TODO: bound generic type to numerics
     fn pmf(&self, value: N) -> f64;
     fn cdf(&self, value: N) -> f64;
 
     fn interval_cdf(&self, lower_bound: N, upper_bound: N) -> f64 {
-        self.cdf(upper_bound) - self.cdf(lower_bound) // need to subtract one so that you get the entire interval
+        self.cdf(upper_bound) - self.cdf(lower_bound - identities::one()) // need to subtract one so that you get the entire interval
     }
 
     fn mean(&self) -> f64;
@@ -366,7 +369,7 @@ impl DiscreteDist<f64> for EmpiricalDist {
 }
 
 
-pub trait ContinuousDist<N> { // TODO: bound generic type to numerics
+pub trait ContinuousDist<N: Num> { // TODO: bound generic type to numerics
     fn pdf(&self, value: N) -> f64;
     fn cdf(&self, value: N) -> f64;
 
@@ -621,7 +624,7 @@ mod tests {
 
         let dist = DiscreteUniformDist::new(lower_bound, upper_bound).unwrap();
 
-        assert_eq!(dist.interval_cdf(lower_bound + 1, upper_bound - 1), (dist.range() - 2) as f64 / dist.range() as f64);
+        assert_eq!(dist.interval_cdf(lower_bound + 1, upper_bound - 1), (dist.range() - 1) as f64 / dist.range() as f64);
     }
 
     #[test]
@@ -690,14 +693,13 @@ mod tests {
         assert_eq!(dist.cdf(2), 1.0);
     }
 
-    // i'm a little mathematically unsure of this one
-    // #[test]
-    // fn bernoulli_dist_correct_interval_cdf() {
-    //     let p = 0.5;
-    //     let dist = BernoulliDist::new(p).unwrap();
+    #[test]
+    fn bernoulli_dist_correct_interval_cdf() {
+        let p = 0.5;
+        let dist = BernoulliDist::new(p).unwrap();
 
-    //     assert_eq!(dist.interval_cdf(0, 1), 1.0);
-    // }
+        assert_eq!(dist.interval_cdf(0, 1), 1.0);
+    }
 
     #[test]
     fn bernoulli_dist_mean_calculated_correctly() {
@@ -888,7 +890,9 @@ mod tests {
         let b = 5.0;
         let cdf = Array::range(a, b + 1.0, 1.0).mapv(|k| dist.pmf(k as i32)).sum();
 
-        assert_eq!(dist.interval_cdf(a as i32, b as i32), cdf);
+        let diff = dist.interval_cdf(a as i32, b as i32) - cdf;
+
+        assert!(diff.abs() < 1e10);
     }
         // interval_cdf
         // mean
