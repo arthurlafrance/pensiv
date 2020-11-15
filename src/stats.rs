@@ -9,7 +9,7 @@ use crate::utils::ComparableFloat;
 
 pub fn factorial(n: i32) -> i32 {
     if n < 0 {
-        return 0;
+        return 0; // panic instead?
     }
     else if n == 0 {
         return 1;
@@ -26,7 +26,12 @@ pub fn permutations(n: i32, k: i32) -> i32 {
 
 
 pub fn choose(n: i32, k: i32) -> i32 {
-    factorial(n) / (factorial(n - k) * factorial(k))
+    if k >= 0 && (n - k) >= 0 { // denominator can't be 0
+        factorial(n) / (factorial(n - k) * factorial(k))
+    }
+    else {
+        0
+    }
 }
 
 
@@ -36,7 +41,7 @@ pub trait DiscreteDist<N> { // TODO: bound generic type to numerics
     fn cdf(&self, value: N) -> f64;
 
     fn interval_cdf(&self, lower_bound: N, upper_bound: N) -> f64 {
-        self.cdf(upper_bound) - self.cdf(lower_bound)
+        self.cdf(upper_bound) - self.cdf(lower_bound) // need to subtract one so that you get the entire interval
     }
 
     fn mean(&self) -> f64;
@@ -125,12 +130,16 @@ impl BernoulliDist {
     pub fn p_success(&self) -> f64 {
         self.p_success
     }
+
+    pub fn p_failure(&self) -> f64 {
+        1.0 - self.p_success
+    }
 }
 
 impl DiscreteDist<i32> for BernoulliDist {
     fn pmf(&self, value: i32) -> f64 {
         if value == 0 {
-            return 1.0 - self.p_success;
+            return self.p_failure();
         }
         else if value == 1 {
             return self.p_success;
@@ -145,7 +154,7 @@ impl DiscreteDist<i32> for BernoulliDist {
             return 0.0;
         }
         else if value == 0 {
-            return 1.0 - self.p_success;
+            return self.p_failure();
         }
         else {
             return 1.0;
@@ -157,7 +166,7 @@ impl DiscreteDist<i32> for BernoulliDist {
     }
 
     fn variance(&self) -> f64 {
-        self.p_success * (1.0 - self.p_success)
+        self.p_success * self.p_failure()
     }
 }
 
@@ -169,7 +178,7 @@ struct BinomDist {
 }
 
 impl BinomDist {
-    pub fn new(p_success: f64, trials: i32) -> Option<BinomDist> {
+    pub fn new(trials: i32, p_success: f64) -> Option<BinomDist> {
         if p_success < 0.0 || p_success > 1.0 {
             return None;
         }
@@ -201,12 +210,14 @@ impl DiscreteDist<i32> for BinomDist {
 
     fn cdf(&self, value: i32) -> f64 {
         let mut cdf_values = Array::range(0.0, value as f64 + 1.0, 1.0);
+
         cdf_values.mapv_inplace(|n| { self.pmf(n as i32) }); // avoid using map because that allocates another array
         cdf_values.sum()
     }
 
     fn interval_cdf(&self, lower_bound: i32, upper_bound: i32) -> f64 {
         let mut cdf_values = Array::range(lower_bound as f64, upper_bound as f64 + 1.0, 1.0);
+
         cdf_values.mapv_inplace(|n| { self.pmf(n as i32) }); // avoid using map because that allocates another array
         cdf_values.sum()
     }
@@ -246,6 +257,10 @@ impl GeometricDist {
 
 impl DiscreteDist<i32> for GeometricDist {
     fn pmf(&self, value: i32) -> f64 {
+        if value <= 0 {
+            return 0.0;
+        }
+
         self.p_success * self.p_failure().powi(value - 1)
     }
 
@@ -551,7 +566,7 @@ mod tests {
     }
             
     #[test]
-    fn discrete_uniform_dist_gives_correct_pdf_inrange() {
+    fn discrete_uniform_dist_gives_correct_pmf_inrange() {
         let lower_bound = 0;
         let upper_bound = 4;
 
@@ -564,7 +579,7 @@ mod tests {
     }
 
     #[test]
-    fn discrete_uniform_dist_gives_correct_pdf_outofrange() {
+    fn discrete_uniform_dist_gives_correct_pmf_outofrange() {
         let lower_bound = 0;
         let upper_bound = 4;
 
@@ -622,33 +637,259 @@ mod tests {
         // variance (i'm literally just gonna plug in a formula but ok then)
 
         // std (again literally just gonna plug in a formula so idk if it's worth testing)
-    // Bernoulli
-        // new
-            // good
-            // bad p
-        // pmf
+    #[test]
+    fn bernoulli_dist_created_correctly() {
+        let p = 0.5;
+        let dist = BernoulliDist::new(p).unwrap();
+
+        assert_eq!(dist.p_success(), p);
+        assert_eq!(dist.p_failure(), 1.0 - p);
+    }
+
+    #[test]
+    fn bernoulli_dist_invalid_creation_fails() {
+        let p = -0.5;
+        let dist = BernoulliDist::new(p);
+
+        assert_eq!(dist, None);
+    }
+
+    #[test]
+    fn bernoulli_dist_correct_pmf_inrange() {
+        let p = 0.5;
+        let dist = BernoulliDist::new(p).unwrap();
+
+        assert_eq!(dist.pmf(0), dist.p_failure());
+        assert_eq!(dist.pmf(1), dist.p_success());
+    }
+
+    #[test]
+    fn bernoulli_dist_correct_pmf_outofrange() {
+        let p = 0.5;
+        let dist = BernoulliDist::new(p).unwrap();
+
+        assert_eq!(dist.pmf(-1), 0.0);
+        assert_eq!(dist.pmf(2), 0.0);
+    }
+
+    #[test]
+    fn bernoulli_dist_correct_cdf_inrange() {
+        let p = 0.5;
+        let dist = BernoulliDist::new(p).unwrap();
+
+        assert_eq!(dist.cdf(0), dist.p_failure());
+        assert_eq!(dist.cdf(1), 1.0);
+    }
+
+    #[test]
+    fn bernoulli_dist_correct_cdf_outofrange() {
+        let p = 0.5;
+        let dist = BernoulliDist::new(p).unwrap();
+
+        assert_eq!(dist.cdf(-1), 0.0);
+        assert_eq!(dist.cdf(2), 1.0);
+    }
+
+    // i'm a little mathematically unsure of this one
+    // #[test]
+    // fn bernoulli_dist_correct_interval_cdf() {
+    //     let p = 0.5;
+    //     let dist = BernoulliDist::new(p).unwrap();
+
+    //     assert_eq!(dist.interval_cdf(0, 1), 1.0);
+    // }
+
+    #[test]
+    fn bernoulli_dist_mean_calculated_correctly() {
+        let p = 0.4;
+        let dist = BernoulliDist::new(p).unwrap();
+
+        assert_eq!(dist.mean(), p);
+    }
+
+    #[test]
+    fn bernoulli_dist_variance_calculated_correctly() {
+        let p = 0.4;
+        let dist = BernoulliDist::new(p).unwrap();
+
+        assert_eq!(dist.variance(), p * (1.0 - p));
+    }
+
+    #[test]
+    fn bernoulli_dist_std_dev_calculated_correctly() {
+        let p = 0.4;
+        let dist = BernoulliDist::new(p).unwrap();
+
+        assert_eq!(dist.std(), (p * (1.0 - p)).sqrt());
+    }
+
+    fn binom_dist_created_correctly() {
+        let n = 4;
+        let p = 0.4;
+
+        let dist = BinomDist::new(n, p).unwrap();
+
+        assert_eq!(dist.trials(), n);
+        assert_eq!(dist.p_success(), p);
+        assert_eq!(dist.p_failure(), 1.0 - p);
+    }
+
+    #[test]
+    fn binom_dist_invalid_p_creation_fails() {
+        let n = 4;
+        let p = -0.5;
+
+        let dist = BinomDist::new(n, p);
+
+        assert_eq!(dist, None);
+    }
+
+    #[test]
+    fn binom_dist_invalid_trials_creation_fails() {
+        let n = -1;
+        let p = 0.5;
+
+        let dist = BinomDist::new(n, p);
+
+        assert_eq!(dist, None);
+    }
+
+    #[test]
+    fn binom_dist_correct_pmf_inrange() {
+        let n = 4;
+        let p = 0.4;
+
+        let dist = BinomDist::new(n, p).unwrap();
+        let pmf = Array::range(0.0, n as f64 + 1.0, 1.0).mapv(|k| dist.pmf(k as i32));
+
+        assert!(pmf.all_close(&array![0.1296, 0.3456, 0.3456, 0.1536, 0.0256], 1e-10));
+    }
+
+    #[test]
+    fn binom_dist_correct_pmf_outofrange() {
+        let n = 4;
+        let p = 0.4;
+
+        let dist = BinomDist::new(n, p).unwrap();
+
+        assert_eq!(dist.pmf(-1), 0.0);
+        assert_eq!(dist.pmf(5), 0.0);
+    }
+
         // cdf
-        // interval_cdf
-        // mean
-        // variance
-        // std
-    // Binom
-        // new
-            // good
-            // bad p
-            // bad trials
-        // pmf
-        // cdf
-        // interval_cdf
-        // mean
-        // variance
-        // std
-    // Geometric
-        // new
-            // good
-            // bad p
-        // pmf
-        // cdf
+    #[test]
+    fn binom_dist_correct_cdf_inrange() {
+        let n = 4;
+        let p = 0.4;
+
+        let dist = BinomDist::new(n, p).unwrap();
+
+        let v = 4.0;
+        let cdf = Array::range(0.0, v, 1.0).mapv(|k| dist.pmf(k as i32)).sum();
+
+        assert_eq!(dist.cdf(v as i32 - 1), cdf);
+    }
+
+    #[test]
+    fn binom_dist_correct_cdf_outofrange() {
+        let n = 4;
+        let p = 0.4;
+
+        let dist = BinomDist::new(n, p).unwrap();
+
+        assert!((dist.cdf(n + 1) - 1.0).abs() < 1e-10);
+    }
+
+    #[test]
+    fn binom_dist_correct_interval_cdf() {
+        let n = 4;
+        let p = 0.4;
+
+        let dist = BinomDist::new(n, p).unwrap();
+
+        let a = 2.0;
+        let b = 3.0;
+        let cdf = Array::range(a, b + 1.0, 1.0).mapv(|k| dist.pmf(k as i32)).sum();
+
+        assert_eq!(dist.interval_cdf(a as i32, b as i32), cdf);
+    }
+
+    #[test]
+    fn binom_dist_mean_calculated_correctly() {
+        let n = 4;
+        let p = 0.4;
+
+        let dist = BinomDist::new(n, p).unwrap();
+
+        assert_eq!(dist.mean(), n as f64 * p);
+    }
+
+    #[test]
+    fn binom_dist_variance_calculated_correctly() {
+        let n = 4;
+        let p = 0.4;
+
+        let dist = BinomDist::new(n, p).unwrap();
+
+        assert_eq!(dist.variance(), n as f64 * p * (1.0 - p));
+    }
+
+    #[test]
+    fn geometric_dist_valid_created_correctly() {
+        let p = 0.4;
+        let dist = GeometricDist::new(p).unwrap();
+
+        assert_eq!(dist.p_success(), p);
+        assert_eq!(dist.p_failure(), 1.0 - p);
+    }
+
+    #[test]
+    fn geometric_dist_invalid_p_creation_fails() {
+        let p = -0.4;
+        let dist = GeometricDist::new(p);
+
+        assert_eq!(dist, None);
+    }
+
+    #[test]
+    fn geometric_dist_correct_pmf_inrange() {
+        let p = 0.4;
+        let dist = GeometricDist::new(p).unwrap();
+
+        let pmfs = Array::range(1.0, 4.0, 1.0).mapv(|k| dist.pmf(k as i32));
+        assert!(pmfs.all_close(&array![0.4, 0.24, 0.144], 1e10));
+    }
+
+    #[test]
+    fn geometric_dist_correct_pmf_outofrange() {
+        let p = 0.4;
+        let dist = GeometricDist::new(p).unwrap();
+
+        assert_eq!(dist.pmf(0), 0.0);
+    }
+
+    #[test]
+    fn geometric_dist_correct_cdf_inrange() {
+        let p = 0.4;
+        let dist = GeometricDist::new(p).unwrap();
+
+        let n = 3.0;
+        let cdf = Array::range(1.0, n + 1.0, 1.0).mapv(|k| dist.pmf(k as i32)).sum();
+
+        assert_eq!(dist.cdf(n as i32), cdf);
+    }
+
+    #[test]
+    fn geometric_dist_correct_interval_cdf() {
+        let p = 0.4;
+        let dist = GeometricDist::new(p).unwrap();
+
+        let a = 3.0;
+        let b = 5.0;
+        let cdf = Array::range(a, b + 1.0, 1.0).mapv(|k| dist.pmf(k as i32)).sum();
+
+        assert_eq!(dist.interval_cdf(a as i32, b as i32), cdf);
+    }
         // interval_cdf
         // mean
         // variance
@@ -664,28 +905,36 @@ mod tests {
         // variance
         // std
 
-    /*
-    fn pdf(&self, value: N) -> f64;
-    fn cdf(&self, value: N) -> f64;
-    fn interval_cdf(&self, lower_bound: N, upper_bound: N) -> f64;
-
-    fn mean(&self) -> f64;
-    fn variance(&self) -> f64;
-    fn std(&self) -> f64;
-    */
-
     // ContinuousUniform
         // new
             // good
             // bad bounds
+        // pdf
+        // cdf
+        // interval_cdf
+        // mean
+        // variance
+        // std
     // Exponential
         // new
             // good
             // bad rate param
+        // pdf
+        // cdf
+        // interval_cdf
+        // mean
+        // variance
+        // std
     // Normal
         // new
             // good
             // bad scale
         // std
         // z
+        // pdf
+        // cdf
+        // interval_cdf
+        // mean
+        // variance
+        // std
 }
