@@ -2003,19 +2003,4 @@ mod tests {
 
         assert_eq!(dist.std(), scale);
     }
-
-    #[test]
-    fn tmp_code_example_runner() {
-        let loc = 5.0;
-        let scale = 2.0;
-        let dist = NormalDist::new(loc, scale).unwrap();
-        
-        println!("{}", dist.pdf(1.0)); // prints "0.0269"
-        println!("{}", dist.pdf(3.0)); // prints "0.1209"
-        println!("{}", dist.pdf(5.0)); // prints "0.1995"
-        println!("{}", dist.pdf(7.0)); // prints "0.1209"
-        println!("{}", dist.pdf(9.0)); // prints "0.0269"
-
-        panic!("");
-    }
 }
