@@ -1,4 +1,4 @@
-//! Commonly-used probability & statistics functionality
+//! Commonly-used probability & statistics functionality.
 //! 
 //! Currently implemented are the properties of several common discrete and continuous distributions, as well as the 
 //! basic combinatorics required to implement them.
@@ -14,9 +14,9 @@ use std::f64::consts::PI;
 
 use crate::utils::ComparableFloat;
 
-/// Returns n!
+/// Returns n!.
 /// 
-/// Note that the function returns 0 if n < 0
+/// Note that the function returns 0 if n < 0.
 pub fn factorial(n: i32) -> i32 {
     if n < 0 {
         return 0; // panic instead?
@@ -30,15 +30,15 @@ pub fn factorial(n: i32) -> i32 {
 }
 
 
-/// Returns the number of k-permutations of n
+/// Returns the number of k-permutations of n.
 pub fn permutations(n: i32, k: i32) -> i32 {
     factorial(n) / factorial(n - k) // TODO: fix if n - k < 0
 }
 
 
-/// Returns n choose k
+/// Returns n choose k.
 ///
-/// Note that the function returns 0 if k < 0 or n - k < 0
+/// Note that the function returns 0 if k < 0 or n - k < 0.
 pub fn choose(n: i32, k: i32) -> i32 {
     if k >= 0 && (n - k) >= 0 { // denominator can't be 0
         factorial(n) / (factorial(n - k) * factorial(k))
@@ -49,7 +49,7 @@ pub fn choose(n: i32, k: i32) -> i32 {
 }
 
 
-/// Base trait for all discrete distributions
+/// Base trait for all discrete distributions.
 ///
 /// The `DiscreteDist` trait provides a general interface for distributions of discrete random variables, including PMF, CDF, mean/expectation, 
 /// variance, and standard deviation. Default implementations of CDF of an interval and standard deviation are provided.
@@ -661,7 +661,7 @@ impl EmpiricalDist {
     pub fn new(dataset: &Array<f64, Ix1>) -> Option<EmpiricalDist> {
         let mut counts = BTreeMap::<ComparableFloat, i32>::new();
         let data_len = dataset.len();
-        let mut data = Array::<f64, Ix1>::zeros((data_len));
+        let mut data = Array::<f64, Ix1>::zeros(data_len);
 
         for (i, elem) in dataset.iter().enumerate() {
             match ComparableFloat::new(*elem) {
@@ -829,13 +829,39 @@ pub trait ContinuousDist<N: Num> { // NOTE: are generics necessary?
 }
 
 
+/// A continuous uniform distribution.
+/// 
+/// The continuous uniform distribution is the continuous adaptation of the discrete uniform distribution. Given a lower and 
+/// upper bound of its support, the probabilitu of any real number inside the support is uniform. Any value outside the 
+/// support has probability `0`.
 #[derive(Debug, PartialEq)]
 pub struct ContinuousUniformDist {
+    // TODO: bad float values?
     lower_bound: f64,
     upper_bound: f64,
 }
 
 impl ContinuousUniformDist {
+    /// Creates and returns a new continuous uniform distribution from `lower_bound` to `upper_bound`.
+    /// 
+    /// Returns `None` if `lower_bound > upper_bound`, otherwise returns the created distribution.
+    /// 
+    /// ```rust
+    /// let a = 1.0;
+    /// let b = 2.5;
+    /// let dist = ContinuousUniformDist::new(a, b).unwrap();
+    /// 
+    /// println!("{}", dist.lower_bound()); // prints "1.0"
+    /// println!("{}", dist.upper_bound()); // prints "2.5"
+    /// ```
+    ///
+    /// ```rust
+    /// let a = 1.0;
+    /// let b = 2.5;
+    /// let dist = ContinuousUniformDist::new(b, a);
+    /// 
+    /// println!("{}", dist == None); // prints "true"
+    /// ```
     pub fn new(lower_bound: f64, upper_bound: f64) -> Option<ContinuousUniformDist> {
         if lower_bound > upper_bound {
             return None;
@@ -844,20 +870,43 @@ impl ContinuousUniformDist {
         Some(ContinuousUniformDist { lower_bound, upper_bound })
     }
 
+    /// Returns the lower bound of the support of the distribution.
     pub fn lower_bound(&self) -> f64 {
         self.lower_bound
     }
 
+    /// Returns the upper bound of the support of the distribution.
     pub fn upper_bound(&self) -> f64 {
         self.upper_bound
     }
 
+    /// Returns the size of the interval of the distribution's values.
+    /// 
+    /// This is equivalent to the difference between the bounds of the support.
     pub fn range(&self) -> f64 {
         self.upper_bound - self.lower_bound
     }
 }
 
 impl ContinuousDist<f64> for ContinuousUniformDist {
+    /// Returns the continuous uniform PDF of `value`.
+    /// 
+    /// If `value` is in the support of the distribution, then `1 / range` is returned, where `range` is the range of the 
+    /// distribution. Otherwise, `0.0` is returned.
+    /// 
+    /// ```rust
+    /// let a = 1.0;
+    /// let b = 2.5;
+    /// let dist = ContinuousUniformDist::new(a, b).unwrap();
+    /// 
+    /// println!("{}", dist.pdf(1.0)); // prints approximately "0.6667"
+    /// println!("{}", dist.pdf(1.5)); // prints approximately "0.6667"
+    /// println!("{}", dist.pdf(2.0)); // prints approximately "0.6667"
+    /// println!("{}", dist.pdf(2.5)); // prints approximately "0.6667"
+    /// 
+    /// println!("{}", dist.pdf(0.0)); // prints "0.0"
+    /// println!("{}", dist.pdf(3.0)); // prints "0.0"
+    /// ```
     fn pdf(&self, value: f64) -> f64 {
         if value >= self.lower_bound && value <= self.upper_bound {
             return 1.0 / self.range();
@@ -867,6 +916,23 @@ impl ContinuousDist<f64> for ContinuousUniformDist {
         }
     }
 
+    /// Returns the continuous uniform CDF of `value`.
+    /// 
+    /// This is equivalent to the fraction of the bounds that `value` is greater than.
+    /// 
+    /// ```rust
+    /// let a = 1.0;
+    /// let b = 2.5;
+    /// let dist = ContinuousUniformDist::new(a, b).unwrap();
+    /// 
+    /// println!("{}", dist.cdf(1.0)); // prints approximately "0.0"
+    /// println!("{}", dist.cdf(1.5)); // prints approximately "0.3333"
+    /// println!("{}", dist.cdf(2.0)); // prints approximately "0.6667"
+    /// println!("{}", dist.cdf(2.5)); // prints approximately "1.0"
+    /// 
+    /// println!("{}", dist.cdf(0.0)); // prints "0.0"
+    /// println!("{}", dist.cdf(3.0)); // prints "1.0"
+    /// ```
     fn cdf(&self, value: f64) -> f64 {
         if value >= self.lower_bound && value <= self.upper_bound {
             return (value - self.lower_bound) / self.range();
@@ -879,6 +945,17 @@ impl ContinuousDist<f64> for ContinuousUniformDist {
         }
     }
 
+    /// Returns the probability that the continuous uniform random variable falls between `lower_bound` and `upper_bound`.
+    /// 
+    /// This is equivalent to the fraction of the support that the interval occupies.
+    /// 
+    /// ```rust
+    /// let a = 1.0;
+    /// let b = 2.5;
+    /// let dist = ContinuousUniformDist::new(a, b).unwrap();
+    /// 
+    /// println!("{}", dist.interval_cdf(1.5, 2.0)); // prints approximately "0.3333"
+    /// ```
     fn interval_cdf(&self, lower_bound: f64, upper_bound: f64) -> f64 {
         let upper = if upper_bound < self.upper_bound { upper_bound } else { self.upper_bound };
         let lower = if lower_bound > self.lower_bound { lower_bound } else { self.lower_bound };
@@ -886,14 +963,23 @@ impl ContinuousDist<f64> for ContinuousUniformDist {
         (upper - lower) / self.range()
     }
 
+    /// Returns the mean of the uniform distribution.
+    /// 
+    /// This is equivalent to the average of the support's bounds.
     fn mean(&self) -> f64 {
         (self.lower_bound + self.upper_bound) / 2.0
     }
 
+    /// Returns the variance of the uniform distribution.
+    /// 
+    /// This is equivalent to: `(upper bound - lower bound)^2 / 12'.
     fn variance(&self) -> f64 {
         (self.upper_bound - self.lower_bound).powi(2) / 12.0
     }
 
+    /// Returns the variance of the uniform distribution.
+    /// 
+    /// This is equivalent to the square root of the variance, or `(upper bound - lower bound) / sqrt(12)'.
     fn std(&self) -> f64 {
         (self.upper_bound - self.lower_bound) / 12.0_f64.sqrt()
     }
@@ -1021,7 +1107,6 @@ impl ContinuousDist<f64> for NormalDist {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ndarray::prelude::*;
     use ndarray::Array;
 
     #[test]
@@ -1198,6 +1283,7 @@ mod tests {
         assert_eq!(dist.std(), (p * (1.0 - p)).sqrt());
     }
 
+    #[test]
     fn binom_dist_created_correctly() {
         let n = 4;
         let p = 0.4;
@@ -1784,10 +1870,12 @@ mod tests {
 
     #[test]
     fn tmp_code_example_runner() {
-        let data = array![1.0, 2.0, 2.0, 3.0];
-        let dist = EmpiricalDist::new(&data).unwrap();
-        println!("{}", dist.interval_cdf(1.0, 2.0)); // prints "0.75"
-        println!("{}", dist.interval_cdf(2.0, 4.0)); // prints "0.75"
+        let a = 1.0;
+        let b = 2.5;
+        let dist = ContinuousUniformDist::new(a, b).unwrap();
+        
+        println!("{}", dist.interval_cdf(1.5, 2.0)); // prints approximately "0.3333"
+        
         panic!("");
     }
 }
