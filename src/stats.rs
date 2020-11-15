@@ -442,13 +442,22 @@ impl ContinuousDist<f64> for ContinuousUniformDist {
         }
     }
 
-    // TODO: better interval cdf
+    fn interval_cdf(&self, lower_bound: f64, upper_bound: f64) -> f64 {
+        let upper = if upper_bound < self.upper_bound { upper_bound } else { self.upper_bound };
+        let lower = if lower_bound > self.lower_bound { lower_bound } else { self.lower_bound };
+
+        (upper - lower) / self.range()
+    }
 
     fn mean(&self) -> f64 {
         (self.lower_bound + self.upper_bound) / 2.0
     }
 
     fn variance(&self) -> f64 {
+        (self.upper_bound - self.lower_bound).powi(2) / 12.0
+    }
+
+    fn std(&self) -> f64 {
         (self.upper_bound - self.lower_bound) / 12.0_f64.sqrt()
     }
 }
@@ -475,10 +484,18 @@ impl ExponentialDist {
 
 impl ContinuousDist<f64> for ExponentialDist {
     fn pdf(&self, value: f64) -> f64 {
+        if value < 0.0 { 
+            return 0.0;
+        }
+
         self.rate_param * (-self.rate_param * value).exp()
     }
 
     fn cdf(&self, value: f64) -> f64 {
+        if value < 0.0 { 
+            return 0.0;
+        }
+
         1.0 - (-self.rate_param * value).exp()
     }
 
@@ -488,6 +505,10 @@ impl ContinuousDist<f64> for ExponentialDist {
 
     fn variance(&self) -> f64 {
         1.0 / self.rate_param.powi(2)
+    }
+
+    fn std(&self) -> f64 {
+        1.0 / self.rate_param
     }
 }
 
@@ -1027,26 +1048,198 @@ mod tests {
         assert!(diff < 1e-10);
     }
 
-    // ContinuousUniform
-        // new
-            // good
-            // bad bounds
-        // pdf
+    #[test]
+    fn continuous_uniform_dist_valid_created_correctly() {
+        let a = 1.0;
+        let b = 2.5;
+        let dist = ContinuousUniformDist::new(a, b).unwrap();
+
+        assert_eq!(dist.lower_bound(), a);
+        assert_eq!(dist.upper_bound(), b);
+        assert_eq!(dist.range(), b - a);
+    }
+
+    #[test]
+    fn continuous_uniform_dist_invalid_bounds_creation_fails() {
+        let a = 2.0;
+        let b = 1.5;
+        let dist = ContinuousUniformDist::new(a, b);
+
+        assert_eq!(dist, None);
+    }
+            
+    #[test]
+    fn continuous_uniform_dist_correct_pdf_inrange() {
+        let a = 1.0;
+        let b = 2.5;
+        let dist = ContinuousUniformDist::new(a, b).unwrap();
+
+        let pdfs = Array::range(a, b, 0.5).mapv(|x| dist.pdf(x));
+        let expected = Array::from_elem(pdfs.shape(), 1.0 / (b - a));
+
+        assert!(pdfs.all_close(&expected, 1e-10));
+    }
+
+    #[test]
+    fn continuous_uniform_dist_correct_pdf_outofrange() {
+        let a = 1.0;
+        let b = 2.5;
+        let dist = ContinuousUniformDist::new(a, b).unwrap();
+
+        assert_eq!(dist.pdf(0.0), 0.0);
+        assert_eq!(dist.pdf(5.0), 0.0);
+    }
+
         // cdf
-        // interval_cdf
-        // mean
-        // variance
-        // std
-    // Exponential
-        // new
-            // good
-            // bad rate param
-        // pdf
-        // cdf
-        // interval_cdf
-        // mean
-        // variance
-        // std
+    #[test]
+    fn continuous_uniform_dist_correct_cdf_inrange() {
+        let a = 1.0;
+        let b = 2.5;
+        let dist = ContinuousUniformDist::new(a, b).unwrap();
+
+        let cdfs = Array::range(a, b, 0.5).mapv(|x| dist.cdf(x));
+        let expected = Array::range(a, b, 0.5).mapv(|x| (x - a) / (b - a));
+
+        assert!(cdfs.all_close(&expected, 1e-10));
+    }
+
+    #[test]
+    fn continuous_uniform_dist_correct_cdf_outofrange() {
+        let a = 1.0;
+        let b = 2.5;
+        let dist = ContinuousUniformDist::new(a, b).unwrap();
+
+        assert_eq!(dist.cdf(0.0), 0.0);
+        assert_eq!(dist.cdf(5.0), 1.0);
+    }
+
+    #[test]
+    fn continuous_uniform_dist_correct_interval_cdf_inrange() {
+        let a = 1.0;
+        let b = 2.5;
+        let dist = ContinuousUniformDist::new(a, b).unwrap();
+
+        let x = a + 0.5;
+        let y = b - 0.5;
+
+        assert_eq!(dist.interval_cdf(x, y), dist.cdf(y) - dist.cdf(x));
+    }
+
+    #[test]
+    fn continuous_uniform_dist_correct_interval_cdf_outofrange() {
+        let a = 1.0;
+        let b = 2.5;
+        let dist = ContinuousUniformDist::new(a, b).unwrap();
+
+        assert_eq!(dist.interval_cdf(a - 0.5, b + 0.5), 1.0);
+    }
+
+    #[test]
+    fn continuous_uniform_dist_mean_calculated_correctly() {
+        let a = 1.0;
+        let b = 2.5;
+        let dist = ContinuousUniformDist::new(a, b).unwrap();
+
+        assert_eq!(dist.mean(), (a + b) / 2.0);
+    }
+
+    #[test]
+    fn continuous_uniform_dist_variance_calculated_correctly() {
+        let a = 1.0;
+        let b = 2.5;
+        let dist = ContinuousUniformDist::new(a, b).unwrap();
+
+        assert_eq!(dist.variance(), (b - a).powi(2) / 12.0);
+    }
+
+    #[test]
+    fn exp_dist_valid_created_correctly() {
+        let r = 0.5;
+        let dist = ExponentialDist::new(r).unwrap();
+
+        assert_eq!(dist.rate_param(), r);
+    }
+    
+    #[test]
+    fn exp_dist_invalid_rateparam_creation_fails() {
+        let r = -0.5;
+        let dist = ExponentialDist::new(r);
+
+        assert_eq!(dist, None);
+    }
+        
+    #[test]
+    fn exp_dist_correct_pdf_inrange() {
+        let r = 0.5;
+        let dist = ExponentialDist::new(r).unwrap();
+
+        let pdfs = Array::range(0.0, 2.0, 0.5).mapv(|k| dist.pdf(k));
+        let expected = array![0.5, 0.3894, 0.3033, 0.2362];
+
+        assert!(pdfs.all_close(&expected, 1e-4)); // error is relatively low because I rounded to 4 decimal places
+    }
+
+    #[test]
+    fn exp_dist_correct_pdf_outofrange() {
+        let r = 0.5;
+        let dist = ExponentialDist::new(r).unwrap();
+
+        assert_eq!(dist.pdf(-1.0), 0.0);
+    }
+    
+    #[test]
+    fn exp_dist_correct_cdf_inrange() {
+        let r = 0.5;
+        let dist = ExponentialDist::new(r).unwrap();
+
+        let cdfs = Array::range(0.0, 4.0, 0.5).mapv(|x| dist.cdf(x));
+        let expected = Array::range(0.0, 4.0, 0.5).mapv(|x| { 1.0 - (-r * x).exp() });
+
+        assert!(cdfs.all_close(&expected, 1e-10));
+    }
+
+    #[test]
+    fn exp_dist_correct_cdf_outofrange() {
+        let r = 0.5;
+        let dist = ExponentialDist::new(r).unwrap();
+
+        assert_eq!(dist.cdf(-1.0), 0.0);
+    }
+        
+    #[test]
+    fn exp_dist_correct_interval_cdf() {
+        let r = 0.5;
+        let dist = ExponentialDist::new(r).unwrap();
+
+        let a = 1.0;
+        let b = 4.0;
+
+        assert_eq!(dist.interval_cdf(a, b), dist.cdf(b) - dist.cdf(a));
+    }
+        
+    #[test]
+    fn exp_dist_mean_calculated_correctly() {
+        let r = 0.5;
+        let dist = ExponentialDist::new(r).unwrap();
+
+        assert_eq!(dist.mean(), 1.0 / r);
+    }
+        
+    #[test]
+    fn exp_dist_variance_calculated_correctly() {
+        let r = 0.5;
+        let dist = ExponentialDist::new(r).unwrap();
+
+        assert_eq!(dist.variance(), 1.0 / r.powi(2));
+    }
+        
+    #[test]
+    fn exp_dist_std_calculated_correctly() {
+        let r = 0.5;
+        let dist = ExponentialDist::new(r).unwrap();
+
+        assert_eq!(dist.std(), 1.0 / r);
+    }
     // Normal
         // new
             // good
