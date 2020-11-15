@@ -620,6 +620,10 @@ impl DiscreteDist<i32> for GeometricDist {
 }
 
 
+/// An empirical distribution describing a set of data.
+///
+/// Empirical distributions are "parameterized" by a data set containing real numbers; they describe the distribution of values within that data set. 
+/// Therefore, the support of the empirical distribution is the set of real numbers present in the data.
 #[derive(Debug)]
 pub struct EmpiricalDist {
     // NOTE: if this dist is immutable, should cache stats directly
@@ -630,11 +634,32 @@ pub struct EmpiricalDist {
 }
 
 impl EmpiricalDist {
-    pub fn new(data: Array<f64, Ix1>) -> Option<EmpiricalDist> {
-        // TODO: ideally would like to take data by reference, copy items into new data array
+    /// Creates and returns a new empirical distribution describing `data`.
+    ///
+    /// Note that `data` must be a 1-dimensional instance of `ndarray::Array` containing the dataset. To create the dataset, `data` is borrowed immutably; 
+    /// because it's borrowed rather than moved, it can continue to be used after the distribution is created. If any element 
+    /// in `data` is `NaN` or infinite, `None` is returned. Otherwise, the created empirical distribution instance is returned.
+    ///
+    /// ```rust
+    /// let data = array![1.0, 2.0, 2.0, 3.0];
+    /// let dist = EmpiricalDist::new(&data).unwrap();
+    /// 
+    /// println!("{}", dist.data() == data); // prints "true"
+    /// ```
+    /// 
+    /// ```rust
+    /// let data = array![1.0, 2.0, 3.0, 1.0 / 0.0, f64::NAN];
+    /// match EmpiricalDist::new(&data) {
+    ///     Some(_) => println!("how'd that happen?"),
+    ///     None => println!("that looks right"),
+    /// } // prints "that looks right"
+    /// ```
+    pub fn new(dataset: &Array<f64, Ix1>) -> Option<EmpiricalDist> {
         let mut counts = BTreeMap::<ComparableFloat, i32>::new();
+        let data_len = dataset.len();
+        let mut data = Array::<f64, Ix1>::zeros((data_len));
 
-        for elem in data.iter() {
+        for (i, elem) in dataset.iter().enumerate() {
             match ComparableFloat::new(*elem) {
                 Some(f) => {
                     if !counts.contains_key(&f) {
@@ -642,22 +667,39 @@ impl EmpiricalDist {
                     }
 
                     counts.insert(f, counts[&f] + 1);
+                    data[[i]] = *elem;
                 },
                 None => return None,
             }
         }
 
-        let data_len = data.len();
-
         Some(EmpiricalDist { counts, data, data_len })
     }
 
+    /// Returns a reference to the distribution's data.
+    /// 
+    /// Note that this array will be a copy of the array that was originally provided when the distribution was created due 
+    /// to the constructor's implementation.
     pub fn data(&self) -> &Array<f64, Ix1> {
         &self.data
     }
 }
 
 impl DiscreteDist<f64> for EmpiricalDist {
+    /// Returns the empirical PMF of `value`.
+    /// 
+    /// The empirical PMF of a value is equivalent to the fraction of the data set that it occupies, i.e. the number of 
+    /// occurrences of `value` in the data set divided by the number of element in the data set. For values that are not 
+    /// present in the data set, the empirical PMF returned is `0.0`.
+    /// 
+    /// ```rust
+    /// let data = array![1.0, 2.0, 2.0, 3.0];
+    /// let dist = EmpiricalDist::new(&data).unwrap();
+    /// 
+    /// println!("{}", dist.pmf(1.0)); // prints "0.25"
+    /// println!("{}", dist.pmf(2.0)); // prints "0.5"
+    /// println!("{}", dist.pmf(3.0)); // prints "0.25"
+    /// ```
     fn pmf(&self, value: f64) -> f64 {
         match ComparableFloat::new(value) {
             Some(f) => {
@@ -672,6 +714,19 @@ impl DiscreteDist<f64> for EmpiricalDist {
         }
     }
 
+    /// Returns the empirical CDF of `value`.
+    /// 
+    /// The empirical CDF of a value is equivalent to the sum of the empirical PMFs of all values in the data set that are 
+    /// less than or equal to `value`.
+    /// 
+    /// ```rust
+    /// let data = array![1.0, 2.0, 2.0, 3.0];
+    /// let dist = EmpiricalDist::new(&data).unwrap();
+    ///
+    /// println!("{}", dist.cdf(1.0)); // prints "0.25"
+    /// println!("{}", dist.cdf(2.0)); // prints "0.75"
+    /// println!("{}", dist.cdf(3.0)); // prints "1.0"
+    /// ```
     fn cdf(&self, value: f64) -> f64 {
         let mut cdf = 0.0;
 
@@ -687,6 +742,17 @@ impl DiscreteDist<f64> for EmpiricalDist {
         cdf / self.data_len as f64
     }
 
+    /// Returns the probability that a randomly chosen element of the data set will fall between `lower_bound` and `upper_bound`, inclusive.
+    /// 
+    /// This is equivalent to the sum of the PMFs of the elements of the data set that are in the interval `lower_bound <= element <= upper_bound`.
+    /// 
+    /// ```rust
+    /// let data = array![1.0, 2.0, 2.0, 3.0];
+    /// let dist = EmpiricalDist::new(&data).unwrap();
+    ///
+    /// println!("{}", dist.interval_cdf(1.0, 2.0)); // prints "0.75"
+    /// println!("{}", dist.interval_cdf(2.0, 4.0)); // prints "0.75"
+    /// ```
     fn interval_cdf(&self, lower_bound: f64, upper_bound: f64) -> f64 {
         let mut cdf = 0.0;
 
@@ -702,10 +768,17 @@ impl DiscreteDist<f64> for EmpiricalDist {
         cdf / self.data_len as f64
     }
 
+    /// Returns the mean of the empirical distribution.
+    /// 
+    /// The mean of an empirical distribution is equivalent to the mean of the data set.
     fn mean(&self) -> f64 {
         self.data.mean().unwrap_or(0.0)
     }
 
+    /// Returns the variance of the empirical distribution.
+    /// 
+    /// The variance of an empirical distribution is equivalent to the difference between the mean of the squared data set 
+    /// and the squared mean of the data set.
     fn variance(&self) -> f64 {
         let data_squared = &self.data * &self.data;
 
@@ -1299,9 +1372,9 @@ mod tests {
     #[test]
     fn empirical_dist_valid_created_correctly() {
         let data = array![1.0, 2.0, 2.0, 3.0, 3.0, 3.0];
-        let dist = EmpiricalDist::new(data).unwrap();
+        let dist = EmpiricalDist::new(&data).unwrap();
 
-        for (i, n) in array![1.0, 2.0, 2.0, 3.0, 3.0, 3.0].iter().enumerate() {
+        for (i, n) in data.iter().enumerate() {
             assert_eq!(dist.data[i], *n);
         }
     }
@@ -1310,7 +1383,7 @@ mod tests {
     fn empirical_dist_invalid_creation_fails() {
         let data = array![1.0, 2.0, f64::NAN, 3.0];
 
-        match EmpiricalDist::new(data) {
+        match EmpiricalDist::new(&data) {
             Some(_) => panic!("found empirical dist instead of None"),
             None => {},
         }
@@ -1319,14 +1392,12 @@ mod tests {
     #[test]
     fn empirical_dist_correct_pmf_indata() {
         let data = array![1.0, 2.0, 2.0, 3.0, 3.0, 3.0];
-        let dist = EmpiricalDist::new(data).unwrap();
+        let dist = EmpiricalDist::new(&data).unwrap();
 
         let mut counts = BTreeMap::new();
         counts.insert(0, 1.0);
         counts.insert(1, 2.0);
         counts.insert(3, 3.0);
-
-        let data = array![1.0, 2.0, 2.0, 3.0, 3.0, 3.0];
 
         for (i, n) in counts.iter() {
             let v = data[[*i]];
@@ -1338,7 +1409,7 @@ mod tests {
     #[test]
     fn empirical_dist_correct_pmf_notindata() {
         let data = array![1.0, 2.0, 2.0, 3.0, 3.0, 3.0];
-        let dist = EmpiricalDist::new(data).unwrap();
+        let dist = EmpiricalDist::new(&data).unwrap();
 
         assert_eq!(dist.pmf(4.0), 0.0);
     }
@@ -1346,7 +1417,7 @@ mod tests {
     #[test]
     fn empirical_dist_correct_pmf_invalid_value() {
         let data = array![1.0, 2.0, 2.0, 3.0, 3.0, 3.0];
-        let dist = EmpiricalDist::new(data).unwrap();
+        let dist = EmpiricalDist::new(&data).unwrap();
 
         assert_eq!(dist.pmf(f64::NAN), 0.0);
     }
@@ -1354,14 +1425,12 @@ mod tests {
     #[test]
     fn empirical_dist_correct_cdf_inrange() {
         let data = array![1.0, 2.0, 2.0, 3.0, 3.0, 3.0];
-        let dist = EmpiricalDist::new(data).unwrap();
+        let dist = EmpiricalDist::new(&data).unwrap();
 
         let mut counts = BTreeMap::new();
         counts.insert(0, 1.0);
         counts.insert(1, 3.0);
         counts.insert(3, 6.0);
-
-        let data = array![1.0, 2.0, 2.0, 3.0, 3.0, 3.0];
 
         for (i, n) in counts.iter() {
             let v = data[[*i]];
@@ -1373,7 +1442,7 @@ mod tests {
     #[test]
     fn empirical_dist_correct_cdf_outofrange() {
         let data = array![1.0, 2.0, 2.0, 3.0, 3.0, 3.0];
-        let dist = EmpiricalDist::new(data).unwrap();
+        let dist = EmpiricalDist::new(&data).unwrap();
 
         assert_eq!(dist.cdf(0.0), 0.0);
         assert_eq!(dist.cdf(5.0), 1.0);
@@ -1382,7 +1451,7 @@ mod tests {
     #[test]
     fn empirical_dist_correct_interval_cdf() {
         let data = array![1.0, 2.0, 2.0, 3.0, 3.0, 4.0];
-        let dist = EmpiricalDist::new(data).unwrap();
+        let dist = EmpiricalDist::new(&data).unwrap();
 
         assert_eq!(dist.interval_cdf(2.0, 4.0), 5.0 / 6.0);
     }
@@ -1390,7 +1459,7 @@ mod tests {
     #[test]
     fn empirical_dist_mean_calculated_correctly() {
         let data = array![1.0, 2.0, 2.0, 3.0, 3.0, 4.0];
-        let dist = EmpiricalDist::new(data).unwrap();
+        let dist = EmpiricalDist::new(&data).unwrap();
 
         assert_eq!(dist.mean(), 2.5);
     }
@@ -1398,7 +1467,7 @@ mod tests {
     #[test]
     fn empirical_dist_variance_calculated_correctly() {
         let data = array![1.0, 2.0, 2.0, 3.0, 3.0, 4.0];
-        let dist = EmpiricalDist::new(data).unwrap();
+        let dist = EmpiricalDist::new(&data).unwrap();
 
         let diff = dist.variance() - 0.917;
 
@@ -1690,14 +1759,10 @@ mod tests {
 
     #[test]
     fn tmp_code_example_runner() {
-        let p = 0.4;
-        let dist = GeometricDist::new(p).unwrap();
-        
-        for k in 0..4 {
-            // prints "0.0", "0.4", "0.64", "0.784"
-            println!("{}", dist.cdf(k));
-        }
-
+        let data = array![1.0, 2.0, 2.0, 3.0];
+        let dist = EmpiricalDist::new(&data).unwrap();
+        println!("{}", dist.interval_cdf(1.0, 2.0)); // prints "0.75"
+        println!("{}", dist.interval_cdf(2.0, 4.0)); // prints "0.75"
         panic!("");
     }
 }

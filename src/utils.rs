@@ -7,7 +7,7 @@ pub struct ComparableFloat(f64);
 
 impl ComparableFloat {
     pub fn new(f: f64) -> Option<ComparableFloat> {
-        if f.is_nan() { None }
+        if f.is_nan() || f.is_infinite() { None }
         else { Some(ComparableFloat(f)) }
     }
 
