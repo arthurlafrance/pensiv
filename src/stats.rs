@@ -918,7 +918,7 @@ impl ContinuousDist<f64> for ContinuousUniformDist {
 
     /// Returns the continuous uniform CDF of `value`.
     /// 
-    /// This is equivalent to the fraction of the bounds that `value` is greater than.
+    /// This is equivalent to the fraction of the support that `value` is greater than.
     /// 
     /// ```rust
     /// let a = 1.0;
@@ -972,26 +972,47 @@ impl ContinuousDist<f64> for ContinuousUniformDist {
 
     /// Returns the variance of the uniform distribution.
     /// 
-    /// This is equivalent to: `(upper bound - lower bound)^2 / 12'.
+    /// This is equivalent to: `(upper bound - lower bound)^2 / 12`.
     fn variance(&self) -> f64 {
         (self.upper_bound - self.lower_bound).powi(2) / 12.0
     }
 
     /// Returns the variance of the uniform distribution.
     /// 
-    /// This is equivalent to the square root of the variance, or `(upper bound - lower bound) / sqrt(12)'.
+    /// This is equivalent to the square root of the variance, or `(upper bound - lower bound) / sqrt(12)`.
     fn std(&self) -> f64 {
         (self.upper_bound - self.lower_bound) / 12.0_f64.sqrt()
     }
 }
 
 
+/// An exponential distribution.
+/// 
+/// The exponential distribution is parameterized by a rate parameter, which dictates the "stretch/shrink" of the distribution's PDF. 
+/// The support of the exponential distribution is the set of non-negative real numbers.
 #[derive(Debug, PartialEq)]
 pub struct ExponentialDist {
     rate_param: f64
 }
 
 impl ExponentialDist {
+    /// Creates and returns a new exponential distribution.
+    /// 
+    /// Because the rate parameter must be positive, the function returns `None` if `rate_param <= 0.0`. Otherwise, the 
+    /// distribution is returned.
+    /// 
+    /// ```rust
+    /// let r = 0.5;
+    /// let dist = ExponentialDist::new(r).unwrap();
+    /// 
+    /// println!("{}", dist.rate_param()); // prints "0.5"
+    /// ```
+    /// 
+    /// ```rust
+    /// let r = -0.5;
+    /// let dist = ExponentialDist::new(r);
+    /// println!("{}", dist == None); // prints "true"
+    /// ```
     pub fn new(rate_param: f64) -> Option<ExponentialDist> {
         if rate_param <= 0.0 {
             return None;
@@ -1000,12 +1021,25 @@ impl ExponentialDist {
         Some(ExponentialDist { rate_param })
     }
 
+    /// Returns the rate parameter of the distribution.
     pub fn rate_param(&self) -> f64 {
         self.rate_param
     }
 }
 
 impl ContinuousDist<f64> for ExponentialDist {
+    /// Returns the exponential PDF of `value`.
+    /// 
+    /// When `value` is outside the support (i.e. negative), `0.0` is returned. Otherwise, the correct PDF is returned.
+    /// 
+    /// ```rust
+    /// let r = 0.5;
+    /// let dist = ExponentialDist::new(r).unwrap();
+    /// 
+    /// println!("{}", dist.pdf(0.0)); // prints "0.0"
+    /// println!("{}", dist.pdf(2.5)); // prints approximately "0.1432"
+    /// println!("{}", dist.pdf(5.0)); // prints approximately "0.041"
+    /// ```
     fn pdf(&self, value: f64) -> f64 {
         if value < 0.0 { 
             return 0.0;
@@ -1014,6 +1048,18 @@ impl ContinuousDist<f64> for ExponentialDist {
         self.rate_param * (-self.rate_param * value).exp()
     }
 
+    /// Returns the exponential CDF of `value`.
+    /// 
+    /// When `value` is outside the support (i.e. negative), `0.0` is returned. Otherwise, the correct PDF is returned.
+    /// 
+    /// ```rust
+    /// let r = 0.5;
+    /// let dist = ExponentialDist::new(r).unwrap();
+    /// 
+    /// println!("{}", dist.cdf(0.0)); // prints "0.0"
+    /// println!("{}", dist.cdf(2.5)); // prints approximately "0.7135"
+    /// println!("{}", dist.cdf(5.0)); // prints approximately "0.9179"
+    /// ```
     fn cdf(&self, value: f64) -> f64 {
         if value < 0.0 { 
             return 0.0;
@@ -1022,24 +1068,38 @@ impl ContinuousDist<f64> for ExponentialDist {
         1.0 - (-self.rate_param * value).exp()
     }
 
+    /// Returns the mean of the distribution.
+    /// 
+    /// This is equivalent to the inverse of the rate parameter of the distribution.
     fn mean(&self) -> f64 {
         1.0 / self.rate_param
     }
 
+    /// Returns the variance of the distribution.
+    /// 
+    /// This is equivalent to the inverse of the squared rate parameter of the distribution.
     fn variance(&self) -> f64 {
         1.0 / self.rate_param.powi(2)
     }
 
+    /// Returns the standard of the distribution.
+    /// 
+    /// This is equivalent to the inverse of the rate parameter of the distribution (which, coincidentally, is also the mean).
     fn std(&self) -> f64 {
         1.0 / self.rate_param
     }
 }
 
 
+/// A normal (Gaussian) distribution.
+/// 
+/// The normal distribution is parameterized by a location and a scale (both real numbers). Those familiar with the normal 
+/// distribution may recognize these parameters as the distribution's mean and standard deviation; `NormalDist` names its 
+/// parameters to reflect their conceptual purpose rather than their relevance to the properties of the distribution.
+/// 
+/// The support of the normal distribution is all real numbers.
 #[derive(Debug, PartialEq)]
 pub struct NormalDist {
-    // NOTE: distributions parameters are so named to reflect their conceptual purpose, rather than their relevance to 
-    // the properties of the distribution
     loc: f64,
     scale: f64,
 }
@@ -1870,11 +1930,12 @@ mod tests {
 
     #[test]
     fn tmp_code_example_runner() {
-        let a = 1.0;
-        let b = 2.5;
-        let dist = ContinuousUniformDist::new(a, b).unwrap();
+        let r = 0.5;
+        let dist = ExponentialDist::new(r).unwrap();
         
-        println!("{}", dist.interval_cdf(1.5, 2.0)); // prints approximately "0.3333"
+        println!("{}", dist.cdf(0.0)); // prints "0.0"
+        println!("{}", dist.cdf(2.5)); // prints approximately "0.7135"
+        println!("{}", dist.cdf(5.0)); // prints approximately "0.9179"
         
         panic!("");
     }
