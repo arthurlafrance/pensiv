@@ -549,15 +549,22 @@ impl NormalDist {
 
 impl ContinuousDist<f64> for NormalDist {
     fn pdf(&self, value: f64) -> f64 {
-        let t1 = 1.0 / (2.0 * PI).sqrt() * self.scale;
-        let t2 = -1.0 * (value - self.loc).powi(2) / (2.0 * self.variance());
+        let t1 = 1.0 / ((2.0 * PI).sqrt() * self.scale);
+        let t2 = -(value - self.loc).powi(2) / (2.0 * self.variance());
 
         t1 * t2.exp()
     }
 
     fn cdf(&self, value: f64) -> f64 {
-        // NOTE: this approximation is currently somewhat naive, will be improved in the future
-        1.0 / (1.0 + (-1.65451 * value).exp())
+        let z = self.z(value);
+
+        let b_values = array![0.319381530, -0.356563782, 1.781477937, -1.821255978, 1.330274429];
+        let b_0 = 0.2316419;
+
+        let t = 1.0 / (1.0 + b_0 * z);
+        let t_values = array![t, t.powi(2), t.powi(3), t.powi(4), t.powi(5)];
+
+        1.0 - NormalDist::std().pdf(z) * (t_values.dot(&b_values))
     }
 
     fn mean(&self) -> f64 {
@@ -1240,16 +1247,96 @@ mod tests {
 
         assert_eq!(dist.std(), 1.0 / r);
     }
-    // Normal
-        // new
-            // good
-            // bad scale
-        // std
-        // z
-        // pdf
+    
+    #[test]
+    fn normal_dist_valid_created_correctly() {
+        let loc = 5.0;
+        let scale = 2.0;
+        let dist = NormalDist::new(loc, scale).unwrap();
+
+        assert_eq!(dist.loc(), loc);
+        assert_eq!(dist.scale(), scale);
+    }
+    
+    #[test]
+    fn normal_dist_invalid_scale_creation_fails() {
+        let loc = 5.0;
+        let scale = -2.0;
+        let dist = NormalDist::new(loc, scale);
+
+        assert_eq!(dist, None);
+    }
+
+    #[test]
+    fn normal_dist_std_created_correctly() {
+        let dist = NormalDist::std();
+
+        assert_eq!(dist.loc(), 0.0);
+        assert_eq!(dist.scale(), 1.0);
+    }
+
+    #[test]
+    fn normal_dist_zvalue_calculated_correctly() {
+        let loc = 5.0;
+        let scale = 2.0;
+        let dist = NormalDist::new(loc, scale).unwrap();
+
+        assert_eq!(dist.z(7.0), 1.0);
+        assert_eq!(dist.z(5.0), 0.0);
+        assert_eq!(dist.z(3.0), -1.0);
+    }
+
+    #[test]
+    fn normal_dist_pdf_correct() {
+        let loc = 5.0;
+        let scale = 2.0;
+        let dist = NormalDist::new(loc, scale).unwrap();
+
+        let pdfs = Array::range(-5.0, 20.0, 5.0).mapv(|x| dist.pdf(x));
+        let expected = array![0.00000074, 0.00876415, 0.19947114, 0.00876415, 0.00000074];
+
+        assert!(pdfs.all_close(&expected, 1e-8));
+    }
         // cdf
+
+    #[test]
+    fn normal_dist_cdf_correct() {
+        let loc = 5.0;
+        let scale = 2.0;
+        let dist = NormalDist::new(loc, scale).unwrap();
+
+        let cdfs = Array::range(0.0, 12.5, 2.5).mapv(|x| dist.cdf(x));
+        let expected = array![0.0062, 0.1056, 0.5, 0.8944, 0.9938]; // NOTE: improve accuracy
+
+        println!("{}", cdfs);
+        assert!(cdfs.all_close(&expected, 1e-8));
+    }
         // interval_cdf
         // mean
+    #[test]
+    fn normal_dist_mean_calculated_correctly() {
+        let loc = 5.0;
+        let scale = 2.0;
+        let dist = NormalDist::new(loc, scale).unwrap();
+
+        assert_eq!(dist.mean(), loc);
+    }
         // variance
+    #[test]
+    fn normal_dist_variance_calculated_correctly() {
+        let loc = 5.0;
+        let scale = 2.0;
+        let dist = NormalDist::new(loc, scale).unwrap();
+
+        assert_eq!(dist.variance(), scale.powi(2));
+    }
         // std
+    #[test]
+    fn normal_dist_std_calculated_correctly() {
+        let loc = 5.0;
+        let scale = 2.0;
+        let dist = NormalDist::new(loc, scale).unwrap();
+
+        assert_eq!(dist.std(), scale);
+    }
 }
