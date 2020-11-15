@@ -292,6 +292,7 @@ struct EmpiricalDist {
 
 impl EmpiricalDist {
     pub fn new(data: Array<f64, Ix1>) -> Option<EmpiricalDist> {
+        // TODO: ideally would like to take data by reference, copy items into new data array
         let mut counts = BTreeMap::<ComparableFloat, i32>::new();
 
         for elem in data.iter() {
@@ -321,9 +322,14 @@ impl DiscreteDist<f64> for EmpiricalDist {
     fn pmf(&self, value: f64) -> f64 {
         match ComparableFloat::new(value) {
             Some(f) => {
-                self.counts[&f] as f64 / self.data_len as f64
+                if self.counts.contains_key(&f) {
+                    self.counts[&f] as f64 / self.data_len as f64
+                }
+                else {
+                    0.0
+                }
             },
-            None => panic!("Encountered NaN in empirical distribution PMF") // NOTE: needs review
+            None => 0.0,
         }
     }
 
@@ -369,7 +375,7 @@ impl DiscreteDist<f64> for EmpiricalDist {
 }
 
 
-pub trait ContinuousDist<N: Num> { // TODO: bound generic type to numerics
+pub trait ContinuousDist<N: Num> {
     fn pdf(&self, value: N) -> f64;
     fn cdf(&self, value: N) -> f64;
 
@@ -859,7 +865,7 @@ mod tests {
         let dist = GeometricDist::new(p).unwrap();
 
         let pmfs = Array::range(1.0, 4.0, 1.0).mapv(|k| dist.pmf(k as i32));
-        assert!(pmfs.all_close(&array![0.4, 0.24, 0.144], 1e10));
+        assert!(pmfs.all_close(&array![0.4, 0.24, 0.144], 1e-10));
     }
 
     #[test]
@@ -892,22 +898,134 @@ mod tests {
 
         let diff = dist.interval_cdf(a as i32, b as i32) - cdf;
 
-        assert!(diff.abs() < 1e10);
+        assert!(diff.abs() < 1e-10);
     }
-        // interval_cdf
-        // mean
-        // variance
-        // std
-    // Empirical
-        // new
-            // good
-            // bad float
-        // pmf
-        // cdf
-        // interval_cdf
-        // mean
-        // variance
-        // std
+
+    #[test]
+    fn geometric_dist_mean_calculated_correctly() {
+        let p = 0.4;
+        let dist = GeometricDist::new(p).unwrap();
+
+        assert_eq!(dist.mean(), 1.0 / p);
+    }
+
+    #[test]
+    fn geometric_dist_variance_calculated_correctly() {
+        let p = 0.4;
+        let dist = GeometricDist::new(p).unwrap();
+
+        let diff = dist.variance() - (1.0 - p) / p.powi(2);
+        assert!(diff < 1e-10);
+    }
+
+    #[test]
+    fn empirical_dist_valid_created_correctly() {
+        let data = array![1.0, 2.0, 2.0, 3.0, 3.0, 3.0];
+        let dist = EmpiricalDist::new(data).unwrap();
+
+        for (i, n) in array![1.0, 2.0, 2.0, 3.0, 3.0, 3.0].iter().enumerate() {
+            assert_eq!(dist.data[i], *n);
+        }
+    }
+
+    #[test]
+    fn empirical_dist_invalid_creation_fails() {
+        let data = array![1.0, 2.0, f64::NAN, 3.0];
+
+        match EmpiricalDist::new(data) {
+            Some(_) => panic!("found empirical dist instead of None"),
+            None => {},
+        }
+    }
+
+    #[test]
+    fn empirical_dist_correct_pmf_indata() {
+        let data = array![1.0, 2.0, 2.0, 3.0, 3.0, 3.0];
+        let dist = EmpiricalDist::new(data).unwrap();
+
+        let mut counts = BTreeMap::new();
+        counts.insert(0, 1.0);
+        counts.insert(1, 2.0);
+        counts.insert(3, 3.0);
+
+        let data = array![1.0, 2.0, 2.0, 3.0, 3.0, 3.0];
+
+        for (i, n) in counts.iter() {
+            let v = data[[*i]];
+
+            assert_eq!(dist.pmf(v), *n / data.len() as f64);
+        }
+    }
+
+    #[test]
+    fn empirical_dist_correct_pmf_notindata() {
+        let data = array![1.0, 2.0, 2.0, 3.0, 3.0, 3.0];
+        let dist = EmpiricalDist::new(data).unwrap();
+
+        assert_eq!(dist.pmf(4.0), 0.0);
+    }
+
+    #[test]
+    fn empirical_dist_correct_pmf_invalid_value() {
+        let data = array![1.0, 2.0, 2.0, 3.0, 3.0, 3.0];
+        let dist = EmpiricalDist::new(data).unwrap();
+
+        assert_eq!(dist.pmf(f64::NAN), 0.0);
+    }
+
+    #[test]
+    fn empirical_dist_correct_cdf_inrange() {
+        let data = array![1.0, 2.0, 2.0, 3.0, 3.0, 3.0];
+        let dist = EmpiricalDist::new(data).unwrap();
+
+        let mut counts = BTreeMap::new();
+        counts.insert(0, 1.0);
+        counts.insert(1, 3.0);
+        counts.insert(3, 6.0);
+
+        let data = array![1.0, 2.0, 2.0, 3.0, 3.0, 3.0];
+
+        for (i, n) in counts.iter() {
+            let v = data[[*i]];
+
+            assert_eq!(dist.cdf(v), *n / data.len() as f64);
+        }
+    }
+
+    #[test]
+    fn empirical_dist_correct_cdf_outofrange() {
+        let data = array![1.0, 2.0, 2.0, 3.0, 3.0, 3.0];
+        let dist = EmpiricalDist::new(data).unwrap();
+
+        assert_eq!(dist.cdf(0.0), 0.0);
+        assert_eq!(dist.cdf(5.0), 1.0);
+    }
+
+    #[test]
+    fn empirical_dist_correct_interval_cdf() {
+        let data = array![1.0, 2.0, 2.0, 3.0, 3.0, 4.0];
+        let dist = EmpiricalDist::new(data).unwrap();
+
+        assert_eq!(dist.interval_cdf(2.0, 4.0), 5.0 / 6.0);
+    }
+
+    #[test]
+    fn empirical_dist_mean_calculated_correctly() {
+        let data = array![1.0, 2.0, 2.0, 3.0, 3.0, 4.0];
+        let dist = EmpiricalDist::new(data).unwrap();
+
+        assert_eq!(dist.mean(), 2.5);
+    }
+
+    #[test]
+    fn empirical_dist_variance_calculated_correctly() {
+        let data = array![1.0, 2.0, 2.0, 3.0, 3.0, 4.0];
+        let dist = EmpiricalDist::new(data).unwrap();
+
+        let diff = dist.variance() - 0.917;
+
+        assert!(diff < 1e-10);
+    }
 
     // ContinuousUniform
         // new
