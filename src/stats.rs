@@ -10,6 +10,9 @@ use std::f64::consts::PI;
 use crate::utils::ComparableFloat;
 
 
+/// Returns n!
+/// 
+/// Note that the function returns 0 if n < 0
 pub fn factorial(n: i32) -> i32 {
     if n < 0 {
         return 0; // panic instead?
@@ -23,11 +26,15 @@ pub fn factorial(n: i32) -> i32 {
 }
 
 
+/// Returns the number of k-permutations of n
 pub fn permutations(n: i32, k: i32) -> i32 {
-    factorial(n) / factorial(n - k)
+    factorial(n) / factorial(n - k) // TODO: fix if n - k < 0
 }
 
 
+/// Returns n choose k
+///
+/// Note that the function returns 0 if k < 0 or n - k < 0
 pub fn choose(n: i32, k: i32) -> i32 {
     if k >= 0 && (n - k) >= 0 { // denominator can't be 0
         factorial(n) / (factorial(n - k) * factorial(k))
@@ -39,23 +46,47 @@ pub fn choose(n: i32, k: i32) -> i32 {
 
 
 /// Base trait for all discrete distributions
-pub trait DiscreteDist<N: Num> { // TODO: bound generic type to numerics
+///
+/// The `DiscreteDist` trait provides a general interface for distributions of discrete random variables, including PMF, CDF, mean/expectation, 
+/// variance, and standard deviation. Default implementations of CDF of an interval and standard deviation are provided.
+/// 
+/// `DiscreteDist` is parametrized by one generic type, `N`, which must conform to the Num trait in the `num-traits` crate; 
+/// it represents the type of the distribution's support.
+pub trait DiscreteDist<N: Num> {
+    /// Returns the probability mass function (PMF) of `value`; varies by distribution. Convention is to return `0.0` for values that are outside the 
+    /// distribution's support.
     fn pmf(&self, value: N) -> f64;
-    fn cdf(&self, value: N) -> f64;
 
+    /// Returns the cumulative density function (CDF) of `value`; varies by distribution.
+    fn cdf(&self, value: N) -> f64; // default implementation?
+
+    /// Returns the probability that the discrete random variable described by this distribution will fall within the interval 
+    /// `lower_bound <= n <= upper_bound` for some n value of the random variable, i.e. the "interval CDF".
+    ///
+    /// The default implementation of this function simply calculates the difference between the CDFs of `upper_bound` and 
+    /// `lower_bound - 1`.
     fn interval_cdf(&self, lower_bound: N, upper_bound: N) -> f64 {
         self.cdf(upper_bound) - self.cdf(lower_bound - identities::one()) // need to subtract one so that you get the entire interval
     }
 
+    /// Returns the mean (expectation) of the distribution.
     fn mean(&self) -> f64;
+
+    /// Returns the variance (average square distance from the mean) of the distribution.
     fn variance(&self) -> f64;
 
+    /// Returns the standard deviation of the distribution. The default implementation of this function returns the square
+    /// root of the distribution's variance.
     fn std(&self) -> f64 {
         self.variance().sqrt()
     }
 }
 
 
+/// Struct representing a discrete uniform distribution.
+///
+/// A `DiscreteUniformDist` is described by its support's lower and upper bounds; all integer values within that range (inclusive)
+/// have equal likelihood of occurring.
 #[derive(Debug, PartialEq)]
 pub struct DiscreteUniformDist {
     lower_bound: i32,
@@ -63,7 +94,28 @@ pub struct DiscreteUniformDist {
 }
 
 impl DiscreteUniformDist {
-    pub fn new(lower_bound: i32, upper_bound: i32) -> Option<DiscreteUniformDist> {
+    /// Creates a new discrete uniform distribution with the given lower and upper bounds.
+    ///
+    /// Returns `None` if `lower_bound > upper_bound`, otherwise returns `Some` containing 
+    /// the created `DiscreteUniformDist`.
+    ///
+    /// ```rust
+    /// let a = 1;
+    /// let b = 5;
+    /// 
+    /// let dist = DiscreteUniformDist::new(a, b).unwrap();
+    /// ```
+    ///
+    /// ```rust
+    /// let a = 5;
+    /// let b = 1;
+    /// 
+    /// match DiscreteUniformDist::new(a, b) {
+    ///     Some(_) => println!("got the distribution!"),
+    ///     None => println!("creation failed"),
+    /// } // prints "creation failed"
+    /// ```
+    pub fn new(lower_bound: i32, upper_bound: i32) -> Option<Self> {
         if lower_bound > upper_bound {
             return None;
         }
@@ -71,20 +123,47 @@ impl DiscreteUniformDist {
         Some(DiscreteUniformDist { lower_bound, upper_bound })
     }
 
+    /// Returns the range of the distribution, i.e. the length of the support.
+    /// 
+    /// ```rust
+    /// let a = 1;
+    /// let b = 5;
+    /// 
+    /// let dist = DiscreteUniformDist::new(a, b).unwrap();
+    /// println!("{}", dist.range()); // prints "5"
+    /// ```
     pub fn range(&self) -> i32 {
-        self.upper_bound - self.lower_bound
+        self.upper_bound - self.lower_bound + 1
     }
 
+    /// Returns the upper bound of the distribution's support
     pub fn upper_bound(&self) -> i32 {
         self.upper_bound
     }
 
+    /// Returns the lower bound of the distribution's support
     pub fn lower_bound(&self) -> i32 {
         self.lower_bound
     }
 }
 
 impl DiscreteDist<i32> for DiscreteUniformDist {
+    /// Returns the PMF of `value` within the distribution.
+    ///
+    /// This method returns `1.0 / range` (where `range` is the range of the distributrion) uniformly for all elements 
+    /// in the support, and returns `0.0` uniformly for elements outside of the support.
+    ///
+    /// ```rust
+    /// let a = 1;
+    /// let b = 5;
+    /// let dist = DiscreteUniformDist::new(a, b).unwrap();
+    /// 
+    /// for i in a..(b + 1) {
+    ///     println!("{}", dist.pmf(i)); // prints "0.2" 5 times
+    /// }
+    /// 
+    /// println!("{}", dist.pmf(2 * b)); // prints "0"
+    /// ```
     fn pmf(&self, value: i32) -> f64 {
         if value < self.lower_bound || value > self.upper_bound {
             return 0.0;
@@ -93,6 +172,24 @@ impl DiscreteDist<i32> for DiscreteUniformDist {
         1.0 / self.range() as f64
     }
 
+    /// Returns the CDF of `value` within the distribution.
+    ///
+    /// For values below the support, `0.0` is returned. For values above the support, `1.0` is returned. For values within 
+    /// the support, the fraction of the support that's at or below `value` is returned, i.e. `(value - lower bound + 1) / range`.
+    ///
+    /// ```rust
+    /// let a = 0;
+    /// let b = 4;
+    /// let dist = DiscreteUniformDist::new(a, b).unwrap();
+    ///
+    /// for i in a..(b + 1) {
+    ///     // prints "0.2", "0.4", "0.6", "0.8", "1.0" (separated by newlines)
+    ///     println!("{}", dist.cdf(i));
+    /// }
+    /// 
+    /// println!("{}", dist.cdf(a - 1)); // prints "0.0"
+    /// println!("{}", dist.cdf(b + 1)); // prints "1.0"
+    /// ```
     fn cdf(&self, value: i32) -> f64 {
         if value < self.lower_bound {
             return 0.0;
@@ -106,10 +203,15 @@ impl DiscreteDist<i32> for DiscreteUniformDist {
 
     // TODO: better interval cdf implementation
 
+    /// Returns the mean of the uniform distribution, i.e. the average of the upper and lower bounds of the support
     fn mean(&self) -> f64 {
         (self.upper_bound + self.lower_bound) as f64 / 2.0
     }
 
+    /// Returns the variance of the uniform distribution.
+    ///
+    /// The variance is calculated according to the following formula:
+    /// `((upper bound - lower bound + 1)^2 - 1) / 12`
     fn variance(&self) -> f64 {
         (((self.upper_bound - self.upper_bound + 1) * (self.upper_bound - self.upper_bound + 1)) as f64 - 1.0) / 12.0
     }
@@ -589,11 +691,13 @@ mod tests {
 
     #[test]
     fn discrete_uniform_dist_created_correctly() {
+        let a = 0;
+        let b = 4;
         let dist = DiscreteUniformDist::new(0, 4).unwrap(); // panics if creation fails
         
-        assert_eq!(dist.lower_bound(), 0);
-        assert_eq!(dist.upper_bound(), 4);
-        assert_eq!(dist.range(), 4);
+        assert_eq!(dist.lower_bound(), a);
+        assert_eq!(dist.upper_bound(), b);
+        assert_eq!(dist.range(), b - a + 1);
     }
 
     #[test]
@@ -655,10 +759,10 @@ mod tests {
     fn discrete_uniform_dist_correct_inverval_cdf() {
         let lower_bound = 1;
         let upper_bound = 5;
-
         let dist = DiscreteUniformDist::new(lower_bound, upper_bound).unwrap();
-
-        assert_eq!(dist.interval_cdf(lower_bound + 1, upper_bound - 1), (dist.range() - 1) as f64 / dist.range() as f64);
+        
+        let diff = dist.interval_cdf(lower_bound + 1, upper_bound - 1) - (dist.range() - 2) as f64 / dist.range() as f64;
+        assert!(diff < 1e-10);
     }
 
     #[test]
@@ -1297,7 +1401,6 @@ mod tests {
 
         assert!(pdfs.all_close(&expected, 1e-8));
     }
-        // cdf
 
     #[test]
     fn normal_dist_cdf_correct() {
@@ -1311,8 +1414,7 @@ mod tests {
         println!("{}", cdfs);
         assert!(cdfs.all_close(&expected, 1e-8));
     }
-        // interval_cdf
-        // mean
+        
     #[test]
     fn normal_dist_mean_calculated_correctly() {
         let loc = 5.0;
@@ -1321,7 +1423,7 @@ mod tests {
 
         assert_eq!(dist.mean(), loc);
     }
-        // variance
+    
     #[test]
     fn normal_dist_variance_calculated_correctly() {
         let loc = 5.0;
@@ -1330,7 +1432,7 @@ mod tests {
 
         assert_eq!(dist.variance(), scale.powi(2));
     }
-        // std
+    
     #[test]
     fn normal_dist_std_calculated_correctly() {
         let loc = 5.0;
@@ -1338,5 +1440,11 @@ mod tests {
         let dist = NormalDist::new(loc, scale).unwrap();
 
         assert_eq!(dist.std(), scale);
+    }
+
+    #[test]
+    fn tmp_code_example_runner() {
+        
+        panic!("");
     }
 }
