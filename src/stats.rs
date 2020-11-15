@@ -502,12 +502,42 @@ impl DiscreteDist<i32> for BinomDist {
 }
 
 
+/// A geometric distribution, representing the number of trials required to achieve 1 success.
+/// 
+/// Geometric distributions are parameterized solely by `p`, the probability that each trial will be a success. The support 
+/// of the geometric distribution is the (infinite) set of non-negative integers.
 #[derive(Debug, PartialEq)]
 pub struct GeometricDist {
     p_success: f64,
 }
 
 impl GeometricDist {
+    /// Creates and returns a new geometric distribution parameterized by `p_success`.
+    ///
+    /// Returns `None` if `p_success` isn't a valid probability, otherwise returns the created distribution.
+    ///
+    /// ```rust
+    /// // Flipping a biased coin until it comes up heads
+    /// let p = 0.4;
+    /// let dist = GeometricDist::new(p).unwrap();
+    /// 
+    /// println!("{}", dist.p_success()); // prints "0.4"
+    /// println!("{}", dist.p_failure()); // prints "0.6"
+    /// ```
+    ///
+    /// ```rust
+    /// let p = -0.4;
+    /// let dist = GeometricDist::new(p);
+    /// 
+    /// println!("{}", dist == None); // prints "true"
+    /// ```
+    ///
+    /// ```rust
+    /// let p = 1.4;
+    /// let dist = GeometricDist::new(p);
+    /// 
+    /// println!("{}", dist == None); // prints "true"
+    /// ```
     pub fn new(p_success: f64) -> Option<GeometricDist> {
         if p_success < 0.0 || p_success > 1.0 {
             return None;
@@ -516,16 +546,33 @@ impl GeometricDist {
         Some(GeometricDist { p_success })
     }
 
+    /// Returns the probability that each trial will be a success.
     pub fn p_success(&self) -> f64 {
         self.p_success
     }
 
+    /// Returns the probability that each trial will be a failure.
     pub fn p_failure(&self) -> f64 {
         1.0 - self.p_success
     }
 }
 
 impl DiscreteDist<i32> for GeometricDist {
+    /// Returns the geometric PMF of `value`.
+    ///
+    /// Returns `0.0` for `value <= 0`, otherwise returns:
+    /// `p(1 - p)^(k - 1)` where `k = value`
+    ///
+    /// ```rust
+    /// // Flipping a biased coin until it comes up heads
+    /// let p = 0.4;
+    /// let dist = GeometricDist::new(p).unwrap();
+    /// 
+    /// for k in 0..4 {
+    ///     // prints "0.0", "0.4", "0.24", "0.144"
+    ///     println!("{}", dist.pmf(k));
+    /// }
+    /// ```
     fn pmf(&self, value: i32) -> f64 {
         if value <= 0 {
             return 0.0;
@@ -534,14 +581,39 @@ impl DiscreteDist<i32> for GeometricDist {
         self.p_success * self.p_failure().powi(value - 1)
     }
 
+    /// Returns the geometric CDF of `value`.
+    ///
+    /// Returns `0.0` for `value <= 0`, otherwise returns the probability that the geometric random variable is less than 
+    /// or equal to `value`.
+    ///
+    /// ```rust
+    /// // Flipping a biased coin until it comes up heads
+    /// let p = 0.4;
+    /// let dist = GeometricDist::new(p).unwrap();
+    /// 
+    /// for k in 0..4 {
+    ///     // prints "0.0", "0.4", "0.64", "0.784"
+    ///     println!("{}", dist.cdf(k));
+    /// }
+    /// ```
     fn cdf(&self, value: i32) -> f64 {
+        if value <= 0 {
+            return 0.0;
+        }
+        
         1.0 - self.p_failure().powi(value)
     }
 
+    /// Returns the mean of the geometric distribution.
+    /// 
+    /// The mean of a geometric distribution is equivalent to the inverse of the parameter `p`, i.e. `1 / p`.
     fn mean(&self) -> f64 {
         1.0 / self.p_success
     }
 
+    /// Returns the variance of the geometric distribution.
+    /// 
+    /// The variance of a geometric distribution is equivalent to `(1 - p) / p^2`.
     fn variance(&self) -> f64 {
         self.p_failure() / self.p_success.powi(2)
     }
@@ -1186,6 +1258,14 @@ mod tests {
     }
 
     #[test]
+    fn geometric_dist_correct_cdf_outofrange() {
+        let p = 0.4;
+        let dist = GeometricDist::new(p).unwrap();
+
+        assert_eq!(dist.cdf(-1), 0.0);
+    }
+
+    #[test]
     fn geometric_dist_correct_interval_cdf() {
         let p = 0.4;
         let dist = GeometricDist::new(p).unwrap();
@@ -1610,13 +1690,11 @@ mod tests {
 
     #[test]
     fn tmp_code_example_runner() {
-        // flipping a biased coin twice, counting the number of heads
-        let n = 2;
         let p = 0.4;
-        let dist = BinomDist::new(n, p).unwrap();
+        let dist = GeometricDist::new(p).unwrap();
         
-        for k in 0..3 {
-            // prints "0.36", "0.48", "0.16" separated by newlines
+        for k in 0..4 {
+            // prints "0.0", "0.4", "0.64", "0.784"
             println!("{}", dist.cdf(k));
         }
 
