@@ -791,17 +791,38 @@ impl DiscreteDist<f64> for EmpiricalDist {
 }
 
 
-pub trait ContinuousDist<N: Num> {
+/// Base trait for all continuous distributions.
+/// 
+/// `ContinuousDist` provides a general interface for implementing the functionality of continuous distributions; it differs 
+/// from `DiscreteDist` only in its requirement of the `pdf()` function in place of `pmf()`, although this difference 
+/// underscores a larger conceptual difference between the two traits.
+/// 
+/// Like `DiscreteDist`, `ContinuousDist` is also parameterized by a generic type `N` which conforms to the `Num` trait from 
+/// `num-traits`.
+pub trait ContinuousDist<N: Num> { // NOTE: are generics necessary?
+    /// Returns the probability density function (PDF) of `value` according to the distribution. Convention is to return `0.0` for 
+    /// values outside the distribution's support.
     fn pdf(&self, value: N) -> f64;
+
+    /// Returns the cumulative distribution function (CDF) of `value` according to the distribution.
     fn cdf(&self, value: N) -> f64;
 
+    /// Returns the probability that a value in the distribution will fall between `lower_bound` and `upper_bound`.
+    /// 
+    /// The default implementation simply finds the difference in the CDFs of the bounds.
     fn interval_cdf(&self, lower_bound: N, upper_bound: N) -> f64 {
         self.cdf(upper_bound) - self.cdf(lower_bound)
     }
 
+    /// Returns the mean (expectation) of the distribution.
     fn mean(&self) -> f64;
+
+    /// Returns the variance (average square distance from the mean) of the distribution.
     fn variance(&self) -> f64;
 
+    /// Returns the standard deviation of the distribution.
+    /// 
+    /// The default implementation returns the square root of the variance.
     fn std(&self) -> f64 {
         self.variance().sqrt()
     }
