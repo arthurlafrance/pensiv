@@ -83,7 +83,7 @@ pub trait DiscreteDist<N: Num> {
 }
 
 
-/// Struct representing a discrete uniform distribution.
+/// A discrete uniform distribution.
 ///
 /// A `DiscreteUniformDist` is described by its support's lower and upper bounds; all integer values within that range (inclusive)
 /// have equal likelihood of occurring.
@@ -343,6 +343,10 @@ impl DiscreteDist<i32> for BernoulliDist {
 }
 
 
+/// A binomial distribution, representing the number of successes that arise from some number of trials.
+///
+/// Binomial distributions are parameterized by `p`, the probability that each trial will be a success (i.e. the Bernoulli probability of each trial), 
+/// and by `n`, the number of trials to perform. The support of the binomial distribution is the (infinite) set of non-negative integers.
 #[derive(Debug, PartialEq)]
 pub struct BinomDist {
     p_success: f64,
@@ -350,7 +354,45 @@ pub struct BinomDist {
 }
 
 impl BinomDist {
-    pub fn new(trials: i32, p_success: f64) -> Option<BinomDist> {
+    /// Creates and returns a new binomial distribution with parameters `n = trials` and `p = p_success`.
+    ///
+    /// Returns `None` if `p_success` is not a valid probability or if `trials < 0`, otherwise returns the created distribution.
+    ///
+    /// ```rust
+    /// // rolling two fair coins 5 times, counting the number of times both are heads
+    /// let p = 0.25;
+    /// let n = 5;
+    ///
+    /// let dist = BinomDist::new(n, p).unwrap();
+    /// println!("{}", dist.p_success()); // prints "0.25"
+    /// println!("{}", dist.p_failure()); // prints "0.75"
+    /// println!("{}", dist.trials()); // prints "5"
+    /// ```
+    ///
+    /// ```rust
+    /// let p = -0.25;
+    /// let n = 5;
+    ///
+    /// let dist = BinomDist::new(n, p);
+    /// println!("{}", dist == None); // prints "true"
+    /// ```
+    ///
+    /// ```rust
+    /// let p = 1.25;
+    /// let n = 5;
+    ///
+    /// let dist = BinomDist::new(n, p);
+    /// println!("{}", dist == None); // prints "true"
+    /// ```
+    ///
+    /// ```rust
+    /// let p = 0.25;
+    /// let n = -5;
+    ///
+    /// let dist = BinomDist::new(n, p);
+    /// println!("{}", dist == None); // prints "true"
+    /// ```
+    pub fn new(trials: i32, p_success: f64) -> Option<Self> {
         if p_success < 0.0 || p_success > 1.0 {
             return None;
         }
@@ -362,24 +404,62 @@ impl BinomDist {
         Some(BinomDist { p_success, trials })
     }
 
+    /// Returns the probability that each trial will succeed, i.e. the Bernoulli probability of each trial or the value of the parameter `p`.
     pub fn p_success(&self) -> f64 {
         self.p_success
     }
 
+    /// Returns the probability that each trial will fail.
     pub fn p_failure(&self) -> f64 {
         1.0 - self.p_success
     }
 
+    /// Returns the number of trials.
     pub fn trials(&self) -> i32 {
         self.trials
     }
 }
 
 impl DiscreteDist<i32> for BinomDist {
+    /// Returns the binomial PMF of `value`.
+    ///
+    /// The binomial PMF is calculated as:
+    /// `(n choose k)(p)^k(1 - p)^(n - k)` where `n` is the number of trials and `k = value`
+    ///
+    /// Note that because of how `choose()` is implemented, this function will (correctly) return `0.0` for values outside of
+    /// the support of the distribution, i.e. negative values.
+    ///
+    /// ```rust
+    /// // flipping a biased coin twice, counting the number of heads
+    /// let n = 2;
+    /// let p = 0.4;
+    /// let dist = BinomDist::new(n, p).unwrap();
+    ///
+    /// for k in 0..3 {
+    ///     // prints "0.36", "0.48", "0.16" separated by newlines
+    ///     println!("{}", dist.pmf(k));
+    /// }
+    /// ```
     fn pmf(&self, value: i32) -> f64 {
         choose(self.trials, value) as f64 * self.p_success.powi(value) * self.p_failure().powi(self.trials - value)
     }
 
+    /// Returns the binomial CDF of `value`.
+    ///
+    /// The binomial CDF is the sum of the binomial PDF of values from `0` to `value` (inclusive). Note that the CDF of 
+    /// negative values returns `0.0`.
+    ///
+    /// ```rust
+    /// // flipping a biased coin twice, counting the number of heads
+    /// let n = 2;
+    /// let p = 0.4;
+    /// let dist = BinomDist::new(n, p).unwrap();
+    ///
+    /// for k in 0..3 {
+    ///     // prints "0.36", "0.84", "1.0" separated by newlines
+    ///     println!("{}", dist.cdf(k));
+    /// }
+    /// ```
     fn cdf(&self, value: i32) -> f64 {
         let mut cdf_values = Array::range(0.0, value as f64 + 1.0, 1.0);
 
@@ -387,6 +467,16 @@ impl DiscreteDist<i32> for BinomDist {
         cdf_values.sum()
     }
 
+    /// Returns the probability that the binomial random variable falls between `lower_bound` and `upper_bound`, inclusive.
+    ///
+    /// ```rust
+    /// // flipping a biased coin three times, counting the number of heads
+    /// let n = 3;
+    /// let p = 0.4;
+    /// let dist = BinomDist::new(n, p).unwrap();
+    ///
+    /// println!("{}", dist.interval_cdf(1, 2)); // prints "0.72"
+    /// ```
     fn interval_cdf(&self, lower_bound: i32, upper_bound: i32) -> f64 {
         let mut cdf_values = Array::range(lower_bound as f64, upper_bound as f64 + 1.0, 1.0);
 
@@ -394,10 +484,18 @@ impl DiscreteDist<i32> for BinomDist {
         cdf_values.sum()
     }
 
+    /// Returns the mean of the binomial distribution.
+    ///
+    /// The mean of a binomial distribution is equivalent to `np`, i.e. the number of trials multiplied by the probability that 
+    /// each trial will succeed.
     fn mean(&self) -> f64 {
         self.trials as f64 * self.p_success
     }
 
+    /// Returns the variance of the binomial distribution.
+    ///
+    /// The variance of a binomial distribution is equivalent to `np(1 - p)`, i.e. the number of trials multiplied by the variance of the Bernoulli 
+    /// random variable for each trial.
     fn variance(&self) -> f64 {
         self.trials as f64 * self.p_success * (1.0 - self.p_success)
     }
@@ -1003,7 +1101,8 @@ mod tests {
         let p = 0.4;
 
         let dist = BinomDist::new(n, p).unwrap();
-
+        
+        assert!((dist.cdf(-1) - 0.0).abs() < 1e-10);
         assert!((dist.cdf(n + 1) - 1.0).abs() < 1e-10);
     }
 
@@ -1511,13 +1610,16 @@ mod tests {
 
     #[test]
     fn tmp_code_example_runner() {
+        // flipping a biased coin twice, counting the number of heads
+        let n = 2;
         let p = 0.4;
-        let dist = BernoulliDist::new(p).unwrap();
+        let dist = BinomDist::new(n, p).unwrap();
         
-        println!("{}", dist.cdf(-1)); // prints "0.0"
-        println!("{}", dist.cdf(0)); // prints "0.6"
-        println!("{}", dist.cdf(1)); // prints "1.0"
-        println!("{}", dist.cdf(2)); // prints "1.0"
+        for k in 0..3 {
+            // prints "0.36", "0.48", "0.16" separated by newlines
+            println!("{}", dist.cdf(k));
+        }
+
         panic!("");
     }
 }
