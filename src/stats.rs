@@ -218,13 +218,45 @@ impl DiscreteDist<i32> for DiscreteUniformDist {
 }
 
 
+/// A distribution describing a Bernoulli ("indicator") random variable.
+///
+/// Bernoulli distributions are parametrized by `p`, the probability that a "success" will occur; or equivalently the probability 
+/// that the random variable will be the value `1`. The support of a Bernoulli random variable, therefore, is `{0, 1}`; the variable
+/// essentially "indicates" a 1 with probability `p`.
 #[derive(Debug, PartialEq)]
-struct BernoulliDist {
+pub struct BernoulliDist {
     p_success: f64,
 }
 
 impl BernoulliDist {
-    pub fn new(p_success: f64) -> Option<BernoulliDist> {
+    /// Creates and returns a new Bernoulli distribution with parameter `p = p_success`.
+    ///
+    /// Note that `p_success` must be a valid probability, so the function returns None if it's invalid, i.e. if 
+    /// `p_success < 0` or `p_success > 1`. If `p_success` is valid, however, the created distribution is returned.
+    ///
+    /// ```rust
+    /// let p = 0.4;
+    /// let dist = BernoulliDist::new(p).unwrap();
+    /// 
+    /// println!("{}", dist.p_success()); // prints "0.4"
+    /// ```
+    ///
+    /// ```rust
+    /// let p1 = -1.0;
+    /// match BernoulliDist::new(p1) {
+    ///     Some(_) => println!("got it!"),
+    ///     None => println!("don't got it!"),
+    /// }
+    ///
+    /// let p2 = 1.7;
+    /// match BernoulliDist::new(p2) {
+    ///     Some(_) => println!("got it!"),
+    ///     None => println!("don't got it!"),
+    /// }
+    /// 
+    /// // both print "don't got it!"
+    /// ```
+    pub fn new(p_success: f64) -> Option<Self> {
         if p_success < 0.0 || p_success > 1.0 {
             return None;
         }
@@ -232,16 +264,35 @@ impl BernoulliDist {
         Some(BernoulliDist { p_success })
     }
 
+    /// Returns the probability of the Bernoulli random variable indicating success, i.e. the probability of the value `1`.
+    ///
+    /// Note that this is the same as the value of the parameter.
     pub fn p_success(&self) -> f64 {
         self.p_success
     }
 
+    /// Returns the probability of the Bernoulli random variable indicating failure, i.e. the probability of the value `0`.
+    ///
+    /// Note that this is the same as `1 - p`, where `p` is the value of the parameter.
     pub fn p_failure(&self) -> f64 {
         1.0 - self.p_success
     }
 }
 
 impl DiscreteDist<i32> for BernoulliDist {
+    /// Returns the Bernoulli PMF of `value`.
+    ///
+    /// Returns `p` for `value = 1`, `1 - p` for `value = 0`, and `0.0` otherwise (where `p` is the value of the parameter).
+    ///
+    /// ```rust
+    /// let p = 0.4;
+    /// let dist = BernoulliDist::new(p).unwrap();
+    /// 
+    /// println!("{}", dist.pmf(-1)); // prints "0.0"
+    /// println!("{}", dist.pmf(0)); // prints "0.6"
+    /// println!("{}", dist.pmf(1)); // prints "0.4"
+    /// println!("{}", dist.pmf(2)); // prints "0.0"
+    /// ```
     fn pmf(&self, value: i32) -> f64 {
         if value == 0 {
             return self.p_failure();
@@ -254,6 +305,20 @@ impl DiscreteDist<i32> for BernoulliDist {
         }
     }
 
+    /// Returns the Bernoulli CDF of `value`.
+    ///
+    /// Returns `0.0` for values below the support (i.e. negative values), `1 - p` for `value = 0`, and `1.0` otherwise, 
+    /// including for `value = 1.0` (where `p` is the value of the parameter).
+    ///
+    /// ```rust
+    /// let p = 0.4;
+    /// let dist = BernoulliDist::new(p).unwrap();
+    /// 
+    /// println!("{}", dist.cdf(-1)); // prints "0.0"
+    /// println!("{}", dist.cdf(0)); // prints "0.6"
+    /// println!("{}", dist.cdf(1)); // prints "1.0"
+    /// println!("{}", dist.cdf(2)); // prints "1.0"
+    /// ```
     fn cdf(&self, value: i32) -> f64 {
         if value < 0 {
             return 0.0;
@@ -266,10 +331,12 @@ impl DiscreteDist<i32> for BernoulliDist {
         }
     }
 
+    /// Returns the mean of the Bernoulli random variable, equal to the parameter `p`.
     fn mean(&self) -> f64 {
         self.p_success
     }
 
+    /// Returns the variance of the Bernoulli random variable, equal to `p(1 - p)` where `p` is the value of the parameter.
     fn variance(&self) -> f64 {
         self.p_success * self.p_failure()
     }
@@ -277,7 +344,7 @@ impl DiscreteDist<i32> for BernoulliDist {
 
 
 #[derive(Debug, PartialEq)]
-struct BinomDist {
+pub struct BinomDist {
     p_success: f64,
     trials: i32,
 }
@@ -338,7 +405,7 @@ impl DiscreteDist<i32> for BinomDist {
 
 
 #[derive(Debug, PartialEq)]
-struct GeometricDist {
+pub struct GeometricDist {
     p_success: f64,
 }
 
@@ -384,7 +451,7 @@ impl DiscreteDist<i32> for GeometricDist {
 
 
 #[derive(Debug)]
-struct EmpiricalDist {
+pub struct EmpiricalDist {
     // NOTE: if this dist is immutable, should cache stats directly
     //       on the other hand, if it's mutable, should add mutating methods
     counts: BTreeMap<ComparableFloat, i32>,
@@ -566,7 +633,7 @@ impl ContinuousDist<f64> for ContinuousUniformDist {
 
 
 #[derive(Debug, PartialEq)]
-struct ExponentialDist {
+pub struct ExponentialDist {
     rate_param: f64
 }
 
@@ -616,7 +683,7 @@ impl ContinuousDist<f64> for ExponentialDist {
 
 
 #[derive(Debug, PartialEq)]
-struct NormalDist {
+pub struct NormalDist {
     // NOTE: distributions parameters are so named to reflect their conceptual purpose, rather than their relevance to 
     // the properties of the distribution
     loc: f64,
@@ -1444,7 +1511,13 @@ mod tests {
 
     #[test]
     fn tmp_code_example_runner() {
+        let p = 0.4;
+        let dist = BernoulliDist::new(p).unwrap();
         
+        println!("{}", dist.cdf(-1)); // prints "0.0"
+        println!("{}", dist.cdf(0)); // prints "0.6"
+        println!("{}", dist.cdf(1)); // prints "1.0"
+        println!("{}", dist.cdf(2)); // prints "1.0"
         panic!("");
     }
 }
