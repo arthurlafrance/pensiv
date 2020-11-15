@@ -1105,6 +1105,27 @@ pub struct NormalDist {
 }
 
 impl NormalDist {
+    /// Creates and returns a new normal distribution.
+    /// 
+    /// If `scale` is negative, `None` is returned; otherwise, the created distribution with parameters 
+    /// `loc` and `scale` is returned.
+    /// 
+    /// ```rust
+    /// let loc = 5.0;
+    /// let scale = 2.0;
+    /// let dist = NormalDist::new(loc, scale).unwrap();
+    /// 
+    /// println!("{}", dist.loc()); // prints "5.0"
+    /// println!("{}", dist.scale()); // prints "2.0"
+    /// ```
+    /// 
+    /// ```rust
+    /// let loc = 5.0;
+    /// let scale = -2.0;
+    /// let dist = NormalDist::new(loc, scale);
+    /// 
+    /// println!("{}", dist == None); // prints "true"
+    /// ```
     pub fn new(loc: f64, scale: f64) -> Option<NormalDist> {
         if scale < 0.0 {
             return None;
@@ -1113,24 +1134,62 @@ impl NormalDist {
         Some(NormalDist { loc, scale })
     }
 
+    /// Creates and returns a new standard normal distribution.
+    /// 
+    /// The standard normal distribution is a normal distribution with `loc = 0` and `scale = 1`.
+    /// 
+    /// ```rust
+    /// let dist = NormalDist::std();
+    /// 
+    /// println!("{}", dist.loc()); // prints "0.0"
+    /// println!("{}", dist.scale()); // prints "1.0"
+    /// ```
     pub fn std() -> NormalDist {
         NormalDist { loc: 0.0, scale: 1.0 }
     }
 
+    /// Returns the location of the normal distribution.
     pub fn loc(&self) -> f64 {
         self.loc
     }
 
+    /// Returns the scale of the normal distribution.
     pub fn scale(&self) -> f64 {
         self.scale
     }
 
+    /// Returns the Z-value of `value` within the distribution.
+    /// 
+    /// The Z-value is obtained by finding the distance from `value` to the mean of the distribution in units of its standard 
+    /// deviation.
+    /// 
+    /// ```rust
+    /// let loc = 5.0;
+    /// let scale = 2.0;
+    /// let dist = NormalDist::new(loc, scale).unwrap();
+    /// 
+    /// println!("{}", dist.z(7.0)); // prints "1.0"
+    /// println!("{}", dist.z(3.0)); // prints "-1.0"
+    /// ```
     pub fn z(&self, value: f64) -> f64 {
         (value - self.loc) / self.scale
     }
 }
 
 impl ContinuousDist<f64> for NormalDist {
+    /// Returns the normal PDF of `value`.
+    /// 
+    /// ```rust
+    /// let loc = 5.0;
+    /// let scale = 2.0;
+    /// let dist = NormalDist::new(loc, scale).unwrap();
+    /// 
+    /// println!("{}", dist.pdf(1.0)); // prints approximately "0.0269"
+    /// println!("{}", dist.pdf(3.0)); // prints approximately "0.1209"
+    /// println!("{}", dist.pdf(5.0)); // prints approximately "0.1995"
+    /// println!("{}", dist.pdf(7.0)); // prints approximately "0.1209"
+    /// println!("{}", dist.pdf(9.0)); // prints approximately "0.0269"
+    /// ```
     fn pdf(&self, value: f64) -> f64 {
         let t1 = 1.0 / ((2.0 * PI).sqrt() * self.scale);
         let t2 = -(value - self.loc).powi(2) / (2.0 * self.variance());
@@ -1138,6 +1197,21 @@ impl ContinuousDist<f64> for NormalDist {
         t1 * t2.exp()
     }
 
+    /// Returns the normal CDF of `value`.
+    /// 
+    /// Note that a less naive approximation (and corresponding citation) are coming soon.
+    /// 
+    /// ```rust
+    /// let loc = 5.0;
+    /// let scale = 2.0;
+    /// let dist = NormalDist::new(loc, scale).unwrap();
+    /// 
+    /// println!("{}", dist.cdf(1.0)); // prints approximately "0.025"
+    /// println!("{}", dist.cdf(3.0)); // prints approximately "0.17"
+    /// println!("{}", dist.cdf(5.0)); // prints approximately "0.5"
+    /// println!("{}", dist.cdf(7.0)); // prints approximately "0.83"
+    /// println!("{}", dist.cdf(9.0)); // prints approximately "0.975"
+    /// ```
     fn cdf(&self, value: f64) -> f64 {
         let z = self.z(value);
 
@@ -1150,14 +1224,17 @@ impl ContinuousDist<f64> for NormalDist {
         1.0 - NormalDist::std().pdf(z) * (t_values.dot(&b_values))
     }
 
+    /// Returns the mean of the distribution, equivalent to the location.
     fn mean(&self) -> f64 {
         self.loc
     }
 
+    /// Returns the variance of the distribution, equivalent to the scale squared.
     fn variance(&self) -> f64 {
         self.scale.powi(2)
     }
 
+    /// Returns the standard deviation of the distribution, equivalent to the scale.
     fn std(&self) -> f64 {
         self.scale
     }
@@ -1167,7 +1244,6 @@ impl ContinuousDist<f64> for NormalDist {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ndarray::Array;
 
     #[test]
     fn discrete_uniform_dist_created_correctly() {
@@ -1930,13 +2006,16 @@ mod tests {
 
     #[test]
     fn tmp_code_example_runner() {
-        let r = 0.5;
-        let dist = ExponentialDist::new(r).unwrap();
+        let loc = 5.0;
+        let scale = 2.0;
+        let dist = NormalDist::new(loc, scale).unwrap();
         
-        println!("{}", dist.cdf(0.0)); // prints "0.0"
-        println!("{}", dist.cdf(2.5)); // prints approximately "0.7135"
-        println!("{}", dist.cdf(5.0)); // prints approximately "0.9179"
-        
+        println!("{}", dist.pdf(1.0)); // prints "0.0269"
+        println!("{}", dist.pdf(3.0)); // prints "0.1209"
+        println!("{}", dist.pdf(5.0)); // prints "0.1995"
+        println!("{}", dist.pdf(7.0)); // prints "0.1209"
+        println!("{}", dist.pdf(9.0)); // prints "0.0269"
+
         panic!("");
     }
 }
