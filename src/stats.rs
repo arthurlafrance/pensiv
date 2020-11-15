@@ -1,3 +1,8 @@
+//! Commonly-used probability & statistics functionality
+//! 
+//! Currently implemented are the properties of several common discrete and continuous distributions, as well as the 
+//! basic combinatorics required to implement them.
+
 use ndarray::prelude::*;
 use ndarray::Array;
 
@@ -8,7 +13,6 @@ use std::collections::BTreeMap;
 use std::f64::consts::PI;
 
 use crate::utils::ComparableFloat;
-
 
 /// Returns n!
 /// 
