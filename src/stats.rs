@@ -1985,9 +1985,8 @@ mod tests {
             0.5, 
             0.8413447404, 
             0.977249938
-        ]; // NOTE: improve accuracy
+        ];
 
-        println!("{}", cdfs);
         assert!(cdfs.all_close(&expected, 1e-8));
     }
         
