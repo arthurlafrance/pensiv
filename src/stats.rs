@@ -49,6 +49,24 @@ pub fn choose(n: i32, k: i32) -> i32 {
 }
 
 
+/// Returns the error function of x.
+/// 
+/// The error function is approximated using a formula from the book _*Abramowitz and Stegun*_, which approximates the 
+/// function with a maximum error of `1.5e-7`.
+pub fn erf(mut x: f64) -> f64 {
+    let parity = if x > 0.0 { 1.0 } else { -1.0 };
+    x *= parity;
+
+    let coeffs = array![0.254829592, -0.284496736, 1.421413741, -1.453152027, 1.061405429];
+    let p = 0.3275911;
+
+    let t = 1.0 / (1.0 + p * x);
+    let t_values = array![t, t.powi(2), t.powi(3), t.powi(4), t.powi(5)];
+
+    parity * (1.0 - coeffs.dot(&t_values) * (-x.powi(2)).exp())
+}
+
+
 /// Base trait for all discrete distributions.
 ///
 /// The `DiscreteDist` trait provides a general interface for distributions of discrete random variables, including PMF, CDF, mean/expectation, 
@@ -103,14 +121,14 @@ impl DiscreteUniformDist {
     /// Returns `None` if `lower_bound > upper_bound`, otherwise returns `Some` containing 
     /// the created `DiscreteUniformDist`.
     ///
-    /// ```rust
+    /// ```ignore
     /// let a = 1;
     /// let b = 5;
     /// 
     /// let dist = DiscreteUniformDist::new(a, b).unwrap();
     /// ```
     ///
-    /// ```rust
+    /// ```ignore
     /// let a = 5;
     /// let b = 1;
     /// 
@@ -129,7 +147,7 @@ impl DiscreteUniformDist {
 
     /// Returns the range of the distribution, i.e. the length of the support.
     /// 
-    /// ```rust
+    /// ```ignore
     /// let a = 1;
     /// let b = 5;
     /// 
@@ -157,7 +175,7 @@ impl DiscreteDist<i32> for DiscreteUniformDist {
     /// This method returns `1.0 / range` (where `range` is the range of the distributrion) uniformly for all elements 
     /// in the support, and returns `0.0` uniformly for elements outside of the support.
     ///
-    /// ```rust
+    /// ```ignore
     /// let a = 1;
     /// let b = 5;
     /// let dist = DiscreteUniformDist::new(a, b).unwrap();
@@ -181,7 +199,7 @@ impl DiscreteDist<i32> for DiscreteUniformDist {
     /// For values below the support, `0.0` is returned. For values above the support, `1.0` is returned. For values within 
     /// the support, the fraction of the support that's at or below `value` is returned, i.e. `(value - lower bound + 1) / range`.
     ///
-    /// ```rust
+    /// ```ignore
     /// let a = 0;
     /// let b = 4;
     /// let dist = DiscreteUniformDist::new(a, b).unwrap();
@@ -238,14 +256,14 @@ impl BernoulliDist {
     /// Note that `p_success` must be a valid probability, so the function returns None if it's invalid, i.e. if 
     /// `p_success < 0` or `p_success > 1`. If `p_success` is valid, however, the created distribution is returned.
     ///
-    /// ```rust
+    /// ```ignore
     /// let p = 0.4;
     /// let dist = BernoulliDist::new(p).unwrap();
     /// 
     /// println!("{}", dist.p_success()); // prints "0.4"
     /// ```
     ///
-    /// ```rust
+    /// ```ignore
     /// let p1 = -1.0;
     /// match BernoulliDist::new(p1) {
     ///     Some(_) => println!("got it!"),
@@ -288,7 +306,7 @@ impl DiscreteDist<i32> for BernoulliDist {
     ///
     /// Returns `p` for `value = 1`, `1 - p` for `value = 0`, and `0.0` otherwise (where `p` is the value of the parameter).
     ///
-    /// ```rust
+    /// ```ignore
     /// let p = 0.4;
     /// let dist = BernoulliDist::new(p).unwrap();
     /// 
@@ -314,7 +332,7 @@ impl DiscreteDist<i32> for BernoulliDist {
     /// Returns `0.0` for values below the support (i.e. negative values), `1 - p` for `value = 0`, and `1.0` otherwise, 
     /// including for `value = 1.0` (where `p` is the value of the parameter).
     ///
-    /// ```rust
+    /// ```ignore
     /// let p = 0.4;
     /// let dist = BernoulliDist::new(p).unwrap();
     /// 
@@ -362,7 +380,7 @@ impl BinomDist {
     ///
     /// Returns `None` if `p_success` is not a valid probability or if `trials < 0`, otherwise returns the created distribution.
     ///
-    /// ```rust
+    /// ```ignore
     /// // rolling two fair coins 5 times, counting the number of times both are heads
     /// let p = 0.25;
     /// let n = 5;
@@ -373,7 +391,7 @@ impl BinomDist {
     /// println!("{}", dist.trials()); // prints "5"
     /// ```
     ///
-    /// ```rust
+    /// ```ignore
     /// let p = -0.25;
     /// let n = 5;
     ///
@@ -381,7 +399,7 @@ impl BinomDist {
     /// println!("{}", dist == None); // prints "true"
     /// ```
     ///
-    /// ```rust
+    /// ```ignore
     /// let p = 1.25;
     /// let n = 5;
     ///
@@ -389,7 +407,7 @@ impl BinomDist {
     /// println!("{}", dist == None); // prints "true"
     /// ```
     ///
-    /// ```rust
+    /// ```ignore
     /// let p = 0.25;
     /// let n = -5;
     ///
@@ -433,7 +451,7 @@ impl DiscreteDist<i32> for BinomDist {
     /// Note that because of how `choose()` is implemented, this function will (correctly) return `0.0` for values outside of
     /// the support of the distribution, i.e. negative values.
     ///
-    /// ```rust
+    /// ```ignore
     /// // flipping a biased coin twice, counting the number of heads
     /// let n = 2;
     /// let p = 0.4;
@@ -453,7 +471,7 @@ impl DiscreteDist<i32> for BinomDist {
     /// The binomial CDF is the sum of the binomial PDF of values from `0` to `value` (inclusive). Note that the CDF of 
     /// negative values returns `0.0`.
     ///
-    /// ```rust
+    /// ```ignore
     /// // flipping a biased coin twice, counting the number of heads
     /// let n = 2;
     /// let p = 0.4;
@@ -473,7 +491,7 @@ impl DiscreteDist<i32> for BinomDist {
 
     /// Returns the probability that the binomial random variable falls between `lower_bound` and `upper_bound`, inclusive.
     ///
-    /// ```rust
+    /// ```ignore
     /// // flipping a biased coin three times, counting the number of heads
     /// let n = 3;
     /// let p = 0.4;
@@ -520,7 +538,7 @@ impl GeometricDist {
     ///
     /// Returns `None` if `p_success` isn't a valid probability, otherwise returns the created distribution.
     ///
-    /// ```rust
+    /// ```ignore
     /// // Flipping a biased coin until it comes up heads
     /// let p = 0.4;
     /// let dist = GeometricDist::new(p).unwrap();
@@ -529,14 +547,14 @@ impl GeometricDist {
     /// println!("{}", dist.p_failure()); // prints "0.6"
     /// ```
     ///
-    /// ```rust
+    /// ```ignore
     /// let p = -0.4;
     /// let dist = GeometricDist::new(p);
     /// 
     /// println!("{}", dist == None); // prints "true"
     /// ```
     ///
-    /// ```rust
+    /// ```ignore
     /// let p = 1.4;
     /// let dist = GeometricDist::new(p);
     /// 
@@ -567,7 +585,7 @@ impl DiscreteDist<i32> for GeometricDist {
     /// Returns `0.0` for `value <= 0`, otherwise returns:
     /// `p(1 - p)^(k - 1)` where `k = value`
     ///
-    /// ```rust
+    /// ```ignore
     /// // Flipping a biased coin until it comes up heads
     /// let p = 0.4;
     /// let dist = GeometricDist::new(p).unwrap();
@@ -590,7 +608,7 @@ impl DiscreteDist<i32> for GeometricDist {
     /// Returns `0.0` for `value <= 0`, otherwise returns the probability that the geometric random variable is less than 
     /// or equal to `value`.
     ///
-    /// ```rust
+    /// ```ignore
     /// // Flipping a biased coin until it comes up heads
     /// let p = 0.4;
     /// let dist = GeometricDist::new(p).unwrap();
@@ -644,14 +662,14 @@ impl EmpiricalDist {
     /// because it's borrowed rather than moved, it can continue to be used after the distribution is created. If any element 
     /// in `data` is `NaN` or infinite, `None` is returned. Otherwise, the created empirical distribution instance is returned.
     ///
-    /// ```rust
+    /// ```ignore
     /// let data = array![1.0, 2.0, 2.0, 3.0];
     /// let dist = EmpiricalDist::new(&data).unwrap();
     /// 
     /// println!("{}", dist.data() == data); // prints "true"
     /// ```
     /// 
-    /// ```rust
+    /// ```ignore
     /// let data = array![1.0, 2.0, 3.0, 1.0 / 0.0, f64::NAN];
     /// match EmpiricalDist::new(&data) {
     ///     Some(_) => println!("how'd that happen?"),
@@ -696,7 +714,7 @@ impl DiscreteDist<f64> for EmpiricalDist {
     /// occurrences of `value` in the data set divided by the number of element in the data set. For values that are not 
     /// present in the data set, the empirical PMF returned is `0.0`.
     /// 
-    /// ```rust
+    /// ```ignore
     /// let data = array![1.0, 2.0, 2.0, 3.0];
     /// let dist = EmpiricalDist::new(&data).unwrap();
     /// 
@@ -723,7 +741,7 @@ impl DiscreteDist<f64> for EmpiricalDist {
     /// The empirical CDF of a value is equivalent to the sum of the empirical PMFs of all values in the data set that are 
     /// less than or equal to `value`.
     /// 
-    /// ```rust
+    /// ```ignore
     /// let data = array![1.0, 2.0, 2.0, 3.0];
     /// let dist = EmpiricalDist::new(&data).unwrap();
     ///
@@ -750,7 +768,7 @@ impl DiscreteDist<f64> for EmpiricalDist {
     /// 
     /// This is equivalent to the sum of the PMFs of the elements of the data set that are in the interval `lower_bound <= element <= upper_bound`.
     /// 
-    /// ```rust
+    /// ```ignore
     /// let data = array![1.0, 2.0, 2.0, 3.0];
     /// let dist = EmpiricalDist::new(&data).unwrap();
     ///
@@ -846,7 +864,7 @@ impl ContinuousUniformDist {
     /// 
     /// Returns `None` if `lower_bound > upper_bound`, otherwise returns the created distribution.
     /// 
-    /// ```rust
+    /// ```ignore
     /// let a = 1.0;
     /// let b = 2.5;
     /// let dist = ContinuousUniformDist::new(a, b).unwrap();
@@ -855,7 +873,7 @@ impl ContinuousUniformDist {
     /// println!("{}", dist.upper_bound()); // prints "2.5"
     /// ```
     ///
-    /// ```rust
+    /// ```ignore
     /// let a = 1.0;
     /// let b = 2.5;
     /// let dist = ContinuousUniformDist::new(b, a);
@@ -894,7 +912,7 @@ impl ContinuousDist<f64> for ContinuousUniformDist {
     /// If `value` is in the support of the distribution, then `1 / range` is returned, where `range` is the range of the 
     /// distribution. Otherwise, `0.0` is returned.
     /// 
-    /// ```rust
+    /// ```ignore
     /// let a = 1.0;
     /// let b = 2.5;
     /// let dist = ContinuousUniformDist::new(a, b).unwrap();
@@ -920,7 +938,7 @@ impl ContinuousDist<f64> for ContinuousUniformDist {
     /// 
     /// This is equivalent to the fraction of the support that `value` is greater than.
     /// 
-    /// ```rust
+    /// ```ignore
     /// let a = 1.0;
     /// let b = 2.5;
     /// let dist = ContinuousUniformDist::new(a, b).unwrap();
@@ -949,7 +967,7 @@ impl ContinuousDist<f64> for ContinuousUniformDist {
     /// 
     /// This is equivalent to the fraction of the support that the interval occupies.
     /// 
-    /// ```rust
+    /// ```ignore
     /// let a = 1.0;
     /// let b = 2.5;
     /// let dist = ContinuousUniformDist::new(a, b).unwrap();
@@ -1001,14 +1019,14 @@ impl ExponentialDist {
     /// Because the rate parameter must be positive, the function returns `None` if `rate_param <= 0.0`. Otherwise, the 
     /// distribution is returned.
     /// 
-    /// ```rust
+    /// ```ignore
     /// let r = 0.5;
     /// let dist = ExponentialDist::new(r).unwrap();
     /// 
     /// println!("{}", dist.rate_param()); // prints "0.5"
     /// ```
     /// 
-    /// ```rust
+    /// ```ignore
     /// let r = -0.5;
     /// let dist = ExponentialDist::new(r);
     /// println!("{}", dist == None); // prints "true"
@@ -1032,7 +1050,7 @@ impl ContinuousDist<f64> for ExponentialDist {
     /// 
     /// When `value` is outside the support (i.e. negative), `0.0` is returned. Otherwise, the correct PDF is returned.
     /// 
-    /// ```rust
+    /// ```ignore
     /// let r = 0.5;
     /// let dist = ExponentialDist::new(r).unwrap();
     /// 
@@ -1052,7 +1070,7 @@ impl ContinuousDist<f64> for ExponentialDist {
     /// 
     /// When `value` is outside the support (i.e. negative), `0.0` is returned. Otherwise, the correct PDF is returned.
     /// 
-    /// ```rust
+    /// ```ignore
     /// let r = 0.5;
     /// let dist = ExponentialDist::new(r).unwrap();
     /// 
@@ -1110,7 +1128,7 @@ impl NormalDist {
     /// If `scale` is negative, `None` is returned; otherwise, the created distribution with parameters 
     /// `loc` and `scale` is returned.
     /// 
-    /// ```rust
+    /// ```ignore
     /// let loc = 5.0;
     /// let scale = 2.0;
     /// let dist = NormalDist::new(loc, scale).unwrap();
@@ -1119,7 +1137,7 @@ impl NormalDist {
     /// println!("{}", dist.scale()); // prints "2.0"
     /// ```
     /// 
-    /// ```rust
+    /// ```ignore
     /// let loc = 5.0;
     /// let scale = -2.0;
     /// let dist = NormalDist::new(loc, scale);
@@ -1138,7 +1156,7 @@ impl NormalDist {
     /// 
     /// The standard normal distribution is a normal distribution with `loc = 0` and `scale = 1`.
     /// 
-    /// ```rust
+    /// ```ignore
     /// let dist = NormalDist::std();
     /// 
     /// println!("{}", dist.loc()); // prints "0.0"
@@ -1163,7 +1181,7 @@ impl NormalDist {
     /// The Z-value is obtained by finding the distance from `value` to the mean of the distribution in units of its standard 
     /// deviation.
     /// 
-    /// ```rust
+    /// ```ignore
     /// let loc = 5.0;
     /// let scale = 2.0;
     /// let dist = NormalDist::new(loc, scale).unwrap();
@@ -1179,7 +1197,7 @@ impl NormalDist {
 impl ContinuousDist<f64> for NormalDist {
     /// Returns the normal PDF of `value`.
     /// 
-    /// ```rust
+    /// ```ignore
     /// let loc = 5.0;
     /// let scale = 2.0;
     /// let dist = NormalDist::new(loc, scale).unwrap();
@@ -1199,9 +1217,9 @@ impl ContinuousDist<f64> for NormalDist {
 
     /// Returns the normal CDF of `value`.
     /// 
-    /// Note that a less naive approximation (and corresponding citation) are coming soon.
+    /// The normal CDF is approximated using the above approximation of the error function; see `erf()` above for details.
     /// 
-    /// ```rust
+    /// ```ignore
     /// let loc = 5.0;
     /// let scale = 2.0;
     /// let dist = NormalDist::new(loc, scale).unwrap();
@@ -1215,13 +1233,7 @@ impl ContinuousDist<f64> for NormalDist {
     fn cdf(&self, value: f64) -> f64 {
         let z = self.z(value);
 
-        let b_values = array![0.319381530, -0.356563782, 1.781477937, -1.821255978, 1.330274429];
-        let b_0 = 0.2316419;
-
-        let t = 1.0 / (1.0 + b_0 * z);
-        let t_values = array![t, t.powi(2), t.powi(3), t.powi(4), t.powi(5)];
-
-        1.0 - NormalDist::std().pdf(z) * (t_values.dot(&b_values))
+        (1.0 + erf(z / 2_f64.sqrt())) / 2.0
     }
 
     /// Returns the mean of the distribution, equivalent to the location.
@@ -1331,9 +1343,6 @@ mod tests {
         assert_eq!(dist.mean(), (upper_bound + lower_bound) as f64 / 2.0);
     }
 
-        // variance (i'm literally just gonna plug in a formula but ok then)
-
-        // std (again literally just gonna plug in a formula so idk if it's worth testing)
     #[test]
     fn bernoulli_dist_created_correctly() {
         let p = 0.5;
@@ -1473,7 +1482,6 @@ mod tests {
         assert_eq!(dist.pmf(5), 0.0);
     }
 
-        // cdf
     #[test]
     fn binom_dist_correct_cdf_inrange() {
         let n = 4;
@@ -1967,13 +1975,18 @@ mod tests {
     #[test]
     fn normal_dist_cdf_correct() {
         let loc = 5.0;
-        let scale = 2.0;
+        let scale = 2.5;
         let dist = NormalDist::new(loc, scale).unwrap();
 
         let cdfs = Array::range(0.0, 12.5, 2.5).mapv(|x| dist.cdf(x));
-        let expected = array![0.0062, 0.1056, 0.5, 0.8944, 0.9938]; // NOTE: improve accuracy
+        let expected = array![
+            0.022750062, 
+            0.1586552596, 
+            0.5, 
+            0.8413447404, 
+            0.977249938
+        ];
 
-        println!("{}", cdfs);
         assert!(cdfs.all_close(&expected, 1e-8));
     }
         
