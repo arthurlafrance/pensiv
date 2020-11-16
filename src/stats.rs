@@ -18,15 +18,11 @@ use crate::utils::ComparableFloat;
 /// 
 /// Note that the function returns 0 if n < 0.
 pub fn factorial(n: i32) -> i32 {
-    if n < 0 {
-        return 0; // panic instead?
-    }
-    else if n == 0 {
+    if n == 0 {
         return 1;
     }
-    else {
-        return n * factorial(n - 1);
-    }
+
+    Array::range(1.0, n as f64 + 1.0, 1.0).product() as i32
 }
 
 
