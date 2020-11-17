@@ -16,16 +16,16 @@ pub trait GameTreeState {
     type Utility;
 
     /// Returns a vector containing the legal actions that can be taken at the current state.
-    pub fn actions(&self) -> Vec<Self::Action>;
+    fn actions(&self) -> Vec<Self::Action>;
 
     // TODO: i think this should return a result to indicate legality of action
     /// Returns the successor state that arises from taking the given action at the current state.
-    pub fn successor(&self, action: Self::Action) -> Self;
+    fn successor(&self, action: Self::Action) -> Self;
 
     /// Returns the utility of the current state according to the evaluation function.
     /// 
     /// Use this function to define a custom evaluation function by which to determine the utility of a custom state.
-    pub fn eval(&self) -> Self::Utility;
+    fn eval(&self) -> Self::Utility;
 }
 
 
@@ -41,5 +41,18 @@ pub trait GameTreeStrategy<State: GameTreeState> {
     type Node: GameTreeNode<State>;
 
     /// Creates and returns a node of the proper type for the given state.
-    pub fn node(&self, state: State) -> Self::Node;
+    fn node(&self, state: State) -> Self::Node;
+}
+
+
+/// Base trait for all nodes in a game tree.
+/// 
+/// This trait is used for defining a general public interface for nodes in a game tree (e.g. minimizer and maximizer nodes). 
+/// Its main relevance to developers is through the provided types that implement it, unless you want to create a custom node 
+/// type to use in a game tree, in which case you should implement this trait for that type (see also `GameTreeStrategy` if 
+/// doing so).
+pub trait GameTreeNode<State: GameTreeState> {
+    fn state(&self) -> State;
+    fn children(&self) -> Vec<Box<dyn GameTreeNode<State>>>;
+    fn utility(&self) -> (State::Utility, State::Action);
 }

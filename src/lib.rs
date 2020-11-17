@@ -10,5 +10,6 @@
 //! of the crate, this will no longer be the case, however.
 
 pub mod stats;
+pub mod adversarial;
 
 mod utils;
