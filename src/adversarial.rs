@@ -1,3 +1,40 @@
+//! Adversarial search & game trees.
+//! 
+//! This module provides methods for evaluating game trees through adversarial search. It was designed to allow for building 
+//! game trees flexibly, and to provide a central method for evaluating these flexible game trees through adversarial search. 
+//! This is accomplished by dividing the process of adversarial search into 3 steps:
+//!
+//! ## Defining an Adversarial Search Problem
+//! 
+//! In order to define an adversarial search problem, you must define the state that represents it. Specifically, you must 
+//! define a type to represent this state, and implement the `GameTreeState` trait for it. This allows the custom state to be 
+//! used in `pensiv`'s provided adversarial search implementation.
+//! 
+//! In order to implement this trait, you must define a type to represent the actions that can be taken between states; 
+//! usually this takes the form of either a simple `struct` or enum. Additionally, you must define a method that returns 
+//! a vector of the actions that can legally be taken from a given state; this will be used to identify child nodes in the 
+//! game tree. You must also define a method that returns the successor state that arises from taking some action at some 
+//! state. This will be used in tandem with the previous method to link actions to successor, or in other words to link parent 
+//! and child nodes in the game tree.
+//! 
+//! In addition to defining a mechanism for performing actions, you must also define a mechanism for representing utility in 
+//! your adversarial search problem through the `Utility` associated type. This will be used to judge the utility of states, 
+//! or equivalently the utility of nodes in the game tree, in order to identify the optimal solution. In tandem with this, the 
+//! `eval()` method must be implemented in order to provide an evaluation function by which to judge the utility of a state; it 
+//! calculates and returns the utility of a given state according to the defined associated type.
+//!
+//! After defining a sufficient state representation for your adversarial search problem, you can move on to building your 
+//! adversarial search agent (describebd in the following section) which will be used to perform adversarial search.
+//! 
+//! ## Building an Adversarial Search Agent
+//! 
+//! TBD
+//! 
+//! ## Performing Adversarial Search
+//! 
+//! TBD
+
+
 /// Base trait for states in a game tree
 /// 
 /// Implement this trait for custom states that are specific to the adversarial search problem. Note that this trait defines 
@@ -20,6 +57,9 @@ pub trait GameTreeState {
 
     // TODO: i think this should return a result to indicate legality of action
     /// Returns the successor state that arises from taking the given action at the current state.
+    /// 
+    /// Note that this function assumes that the action being taken is a valid action to take from the current state; any 
+    /// violation of this precondition is undefined behavior, and can be handled at the developer's discretion.
     fn successor(&self, action: Self::Action) -> Self;
 
     /// Returns the utility of the current state according to the evaluation function.
