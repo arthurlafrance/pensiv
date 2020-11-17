@@ -52,7 +52,22 @@ pub trait GameTreeStrategy<State: GameTreeState> {
 /// type to use in a game tree, in which case you should implement this trait for that type (see also `GameTreeStrategy` if 
 /// doing so).
 pub trait GameTreeNode<State: GameTreeState> {
+    /// Returns the state stored at this node.
+    /// 
+    /// This method is typically simply an accessor method of the node's internal state field.
     fn state(&self) -> State;
+
+    /// Returns the node's children.
+    /// 
+    /// Note that a node's children don't need to be of the same type; as long as they use the same state as this node, 
+    /// they're valid children. As a concrete example, this means that a minimizer node can have maximizer nodes as its 
+    /// children, as long as all nodes are generic to the same state.
     fn children(&self) -> Vec<Box<dyn GameTreeNode<State>>>;
+
+    /// Returns the node's utility and the action required to achieve that utility.
+    /// 
+    /// How a node's utility is calculated is determined by the type of node in this method. For example, minimizer nodes 
+    /// will minimize the utility of their children; maximizer nodes do the opposite. Thus, this method is how to determine 
+    /// the method by which a node calculates its own usility, potentially relative to its children's utility.
     fn utility(&self) -> (State::Utility, State::Action);
 }
