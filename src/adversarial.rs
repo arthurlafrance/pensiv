@@ -80,22 +80,6 @@ pub trait GameTreeState {
 }
 
 
-/// Base trait for all strategies in a game tree.
-/// 
-/// `pensiv` defines a game tree strategy as the type of node to be used at a given layer in the game tree. The main purpose of 
-/// this is to serve as a factory for creating nodes in a game tree in an idiomatic way. Thus, implement this trait only if you 
-/// also implement a custom type of game tree node, or if you want to alter the creation of an existing type of node. 
-/// You should not have to implement this trait in any other circumstance; implementations of this trait for nodes implemented by 
-/// `pensiv` will be provided.
-pub trait GameTreeStrategy<State: GameTreeState> {
-    /// The type of game tree node to be used for the strategy.
-    type Node: GameTreeNode<State>;
-
-    /// Creates and returns a node of the proper type for the given state.
-    fn node(&self, state: State) -> Self::Node;
-}
-
-
 /// Base trait for all nodes in a game tree.
 /// 
 /// This trait is used for defining a general public interface for nodes in a game tree (e.g. minimizer and maximizer nodes). 
