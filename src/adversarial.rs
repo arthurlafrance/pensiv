@@ -3,6 +3,9 @@
 //! This module provides methods for evaluating game trees through adversarial search. It was designed to allow for building 
 //! game trees flexibly, and to provide a central method for evaluating these flexible game trees through adversarial search. 
 //! This is accomplished by dividing the process of adversarial search into 3 steps:
+//! 
+//! NOTE: a complete example program using adversarial search is available [here](https://github.com/arthurlafrance/pensiv). 
+//! See this example for examples of the code in this module.
 //!
 //! ## Defining an Adversarial Search Problem
 //! 
@@ -66,6 +69,14 @@ pub trait GameTreeState {
     /// 
     /// Use this function to define a custom evaluation function by which to determine the utility of a custom state.
     fn eval(&self) -> Self::Utility;
+
+    /// Returns `true` if the state is a terminal state, `false` otherwise.
+    /// 
+    /// The default implementation of this method simply checks to see if there are any legal actions that can be taken; 
+    /// override this if you would like to modify this functionality.
+    fn is_terminal(&self) -> bool {
+        self.actions().len() == 0
+    }
 }
 
 
@@ -92,22 +103,66 @@ pub trait GameTreeStrategy<State: GameTreeState> {
 /// type to use in a game tree, in which case you should implement this trait for that type (see also `GameTreeStrategy` if 
 /// doing so).
 pub trait GameTreeNode<State: GameTreeState> {
-    /// Returns the state stored at this node.
+    /// Returns a reference to the state stored at this node.
     /// 
     /// This method is typically simply an accessor method of the node's internal state field.
-    fn state(&self) -> State;
+    fn state(&self) -> &State;
 
-    /// Returns the node's children.
+    /// Returns a reference to a vector containing the node's children, if they exist.
+    /// 
+    /// Returns `None` if the node is terminal, i.e. if it has no children, otherwise return a reference to them.
     /// 
     /// Note that a node's children don't need to be of the same type; as long as they use the same state as this node, 
     /// they're valid children. As a concrete example, this means that a minimizer node can have maximizer nodes as its 
     /// children, as long as all nodes are generic to the same state.
-    fn children(&self) -> Vec<Box<dyn GameTreeNode<State>>>;
+    fn children(&self) -> Option<&Vec<Box<dyn GameTreeNode<State>>>>;
 
-    /// Returns the node's utility and the action required to achieve that utility.
+    /// Returns the node's utility and the action required to achieve that utility, if it exists.
+    /// 
+    /// Note that the optional action returned will be `None` if the node is a terminal node, otherwise it will correctly 
+    /// return the action required to achieve the returned utility.
     /// 
     /// How a node's utility is calculated is determined by the type of node in this method. For example, minimizer nodes 
     /// will minimize the utility of their children; maximizer nodes do the opposite. Thus, this method is how to determine 
     /// the method by which a node calculates its own usility, potentially relative to its children's utility.
-    fn utility(&self) -> (State::Utility, State::Action);
+    fn utility(&self) -> (State::Utility, Option<State::Action>);
+}
+
+
+/// A terminal (i.e. leaf) node in a game tree.
+/// 
+/// This node type is used for leaf nodes in the game tree, based on two criteria: if the node's state is terminal, it's a 
+/// terminal node; or alternatively, if it's part of the last layer of the game tree, it's a terminal node. A terminal node 
+/// has no children by definition, so its utility is simply the evaluated utility of its state.
+pub struct TerminalNode<State: GameTreeState> {
+    state: State, // by reference?
+}
+
+impl<State: GameTreeState> TerminalNode<State> {
+    /// Creates and returns a new terminal node for the given state.
+    /// 
+    /// Note that the state is moved as part of the creation, and will not be valid after creation. Unless, of course, it can 
+    /// be copied, although be aware that that's a cost that arises from this constructor.
+    pub fn new(state: State) -> TerminalNode<State> {
+        TerminalNode { state }
+    }
+}
+
+impl<State: GameTreeState> GameTreeNode<State> for TerminalNode<State> {
+    /// Returns a reference to the state for this node.
+    fn state(&self) -> &State {
+        &self.state
+    }
+
+    /// Returns an optional reference to a vector of this node's children. Note that because this node is terminal, this 
+    /// method always returns `None`.
+    fn children(&self) -> Option<&Vec<Box<dyn GameTreeNode<State>>>> {
+        None
+    }
+
+    /// Returns the utility of this node's (possibly terminal) state, calculated according to the state's evaluation function. 
+    /// Note that the optional action will always be `None` because this is a terminal state.
+    fn utility(&self) -> (State::Utility, Option<State::Action>) {
+        (self.state.eval(), None)
+    }
 }
