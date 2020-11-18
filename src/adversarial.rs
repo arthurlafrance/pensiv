@@ -166,3 +166,78 @@ impl<State: GameTreeState> GameTreeNode<State> for TerminalNode<State> {
         (self.state.eval(), None)
     }
 }
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[derive(Clone, Copy, Debug, PartialEq)]
+    struct CountToTenState {
+        count: i32,
+        done: bool,
+    }
+
+    impl CountToTenState {
+        pub fn start() -> CountToTenState {
+            CountToTenState { count: 0, done: false }
+        }
+
+        pub fn new(count: i32, done: bool) -> CountToTenState {
+            CountToTenState { count: count, done: done }
+        }
+    }
+
+    impl GameTreeState for CountToTenState {
+        type Action = CountToTenAction;
+        type Utility = i32;
+
+        fn actions(&self) -> Vec<Self::Action> {
+            if self.done {
+                Vec::new()
+            }
+            else if self.count < 10 {
+                vec![CountToTenAction::Increment, CountToTenAction::Done]
+            }
+            else {
+                vec![CountToTenAction::Done]
+            }
+        }
+
+        fn successor(&self, action: Self::Action) -> Self {            
+            match action {
+                CountToTenAction::Increment => CountToTenState::new(self.count + 1, false),
+                CountToTenAction::Done => CountToTenState::new(self.count, true),
+            }
+        }
+
+        fn eval(&self) -> Self::Utility {
+            self.count
+        }
+
+        fn is_terminal(&self) -> bool {
+            self.done
+        }
+    }
+
+    #[derive(Clone, Copy, Debug, PartialEq)]
+    enum CountToTenAction {
+        Increment,
+        Done,
+    }
+
+
+    #[test]
+    fn terminal_node_created_with_correct_properties() {
+        let state = CountToTenState::new(8, true);
+        let node = TerminalNode::new(state);
+
+        assert_eq!(*node.state(), state);
+        assert_eq!(node.utility(), (state.eval(), None));
+
+        match node.children() {
+            Some(_) => panic!("found children for terminal node"),
+            None => {},
+        };
+    }
+}
