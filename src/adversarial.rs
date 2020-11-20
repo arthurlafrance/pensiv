@@ -5,12 +5,12 @@
 //! This is accomplished by dividing the process of adversarial search into 3 steps:
 //! 
 //! NOTE: a complete example program using adversarial search is available [here](https://github.com/arthurlafrance/pensiv). 
-//! See this example for examples of the code in this module.
+//! See it for examples of the code in this module.
 //!
 //! ## Defining an Adversarial Search Problem
 //! 
 //! In order to define an adversarial search problem, you must define the state that represents it. Specifically, you must 
-//! define a type to represent this state, and implement the `GameTreeState` trait for it. This allows the custom state to be 
+//! define a type to represent this state, and implement the `AdversarialSearchState` trait for it. This allows the custom state to be 
 //! used in `pensiv`'s provided adversarial search implementation.
 //! 
 //! In order to implement this trait, you must define a type to represent the actions that can be taken between states; 
@@ -38,6 +38,63 @@
 //! TBD
 
 
+pub struct AdversarialSearchAgent<'a, State: AdversarialSearchState> {
+    strategy: &'a dyn Fn(&State) -> Box<dyn AdversarialSearchNode<State>>,
+    adversaries: Vec<&'a dyn Fn(&State) -> Box<dyn AdversarialSearchNode<State>>>,
+    max_depth: Option<usize>, // NOTE: depth is defined slightly differently than the traditional tree depth property
+}
+
+impl<'a, State: AdversarialSearchState> AdversarialSearchAgent<'a, State> {
+    pub fn new(strategy: &'a dyn Fn(&State) -> Box<dyn AdversarialSearchNode<State>>, adversaries: Vec<&'a dyn Fn(&State) -> Box<dyn AdversarialSearchNode<State>>>, max_depth: Option<usize>) -> AdversarialSearchAgent<'a, State> {
+        if let Some(d) = max_depth {
+            if d <= 0 {
+                panic!("Adversarial search max depth must be a positive integer (or None)");
+            }
+        }
+
+        AdversarialSearchAgent { strategy, adversaries, max_depth }
+    }
+
+    // pub fn minimax(adversaries: i32) -> AdversarialSearchAgent {
+
+    // }
+
+    // pub fn expectimax(adversaries: i32) -> AdversarialSearchAgent {
+
+    // }
+
+    pub fn action(&self, state: State) -> Option<State::Action> {
+        let root = self.make_node(state, 0, 0);
+        let (_, action) = root.utility();
+
+        action
+    }
+
+    fn make_node(&self, state: State, depth: usize, layer: usize) -> Box<dyn AdversarialSearchNode<State>> {
+        let mut node = if layer == 0 {
+            (self.strategy)(&state)
+        }
+        else {
+            self.adversaries[layer - 1](&state)
+        };
+
+        if self.max_depth == None || depth < self.max_depth.unwrap() {
+            for action in state.actions() {
+                let successor = state.successor(action);
+
+                let next_layer = layer + 1;
+                let next_depth = if next_layer < self.adversaries.len() + 1 { depth } else { depth + 1 };
+                let child = self.make_node(successor, next_depth, next_layer % (self.adversaries.len() + 1));
+
+                node.children().push(child);
+            }
+        }
+
+        node
+    }
+}
+
+
 /// Base trait for states in a game tree
 /// 
 /// Implement this trait for custom states that are specific to the adversarial search problem. Note that this trait defines 
@@ -45,7 +102,7 @@
 /// internals of their state to be specific to the problem they're trying to solve. For example, a chess-playing 
 /// program might define its own state to represent the board, and would implement this trait for that state in order to use 
 /// the custom state in `pensiv`'s adversarial search functionality.
-pub trait GameTreeState {
+pub trait AdversarialSearchState {
     /// Describes a legal action that can be taken during the game.
     type Action;
 
@@ -80,29 +137,13 @@ pub trait GameTreeState {
 }
 
 
-// /// Base trait for all strategies in a game tree.
-// /// 
-// /// `pensiv` defines a game tree strategy as the type of node to be used at a given layer in the game tree. The main purpose of 
-// /// this is to serve as a factory for creating nodes in a game tree in an idiomatic way. Thus, implement this trait only if you 
-// /// also implement a custom type of game tree node, or if you want to alter the creation of an existing type of node. 
-// /// You should not have to implement this trait in any other circumstance; implementations of this trait for nodes implemented by 
-// /// `pensiv` will be provided.
-// pub trait GameTreeStrategy<State: GameTreeState> {
-//     /// The type of game tree node to be used for the strategy.
-//     type Node: GameTreeNode<State>;
-
-//     /// Creates and returns a node of the proper type for the given state.
-//     fn node(&self, state: State) -> Self::Node;
-// }
-
-
 /// Base trait for all nodes in a game tree.
 /// 
 /// This trait is used for defining a general public interface for nodes in a game tree (e.g. minimizer and maximizer nodes). 
 /// Its main relevance to developers is through the provided types that implement it, unless you want to create a custom node 
-/// type to use in a game tree, in which case you should implement this trait for that type (see also `GameTreeStrategy` if 
+/// type to use in a game tree, in which case you should implement this trait for that type (see also `AdversarialSearchStrategy` if 
 /// doing so).
-pub trait GameTreeNode<State: GameTreeState> {
+pub trait AdversarialSearchNode<State: AdversarialSearchState> {
     /// Returns a reference to the state stored at this node.
     /// 
     /// This method is typically simply an accessor method of the node's internal state field.
@@ -115,7 +156,7 @@ pub trait GameTreeNode<State: GameTreeState> {
     /// Note that a node's children don't need to be of the same type; as long as they use the same state as this node, 
     /// they're valid children. As a concrete example, this means that a minimizer node can have maximizer nodes as its 
     /// children, as long as all nodes are generic to the same state.
-    fn children(&self) -> Option<&Vec<Box<dyn GameTreeNode<State>>>>;
+    fn children(&mut self) -> &mut Vec<Box<dyn AdversarialSearchNode<State>>>;
 
     /// Returns the node's utility and the action required to achieve that utility, if it exists.
     /// 
@@ -126,45 +167,6 @@ pub trait GameTreeNode<State: GameTreeState> {
     /// will minimize the utility of their children; maximizer nodes do the opposite. Thus, this method is how to determine 
     /// the method by which a node calculates its own usility, potentially relative to its children's utility.
     fn utility(&self) -> (State::Utility, Option<State::Action>);
-}
-
-
-/// A terminal (i.e. leaf) node in a game tree.
-/// 
-/// This node type is used for leaf nodes in the game tree, based on two criteria: if the node's state is terminal, it's a 
-/// terminal node; or alternatively, if it's part of the last layer of the game tree, it's a terminal node. A terminal node 
-/// has no children by definition, so its utility is simply the evaluated utility of its state.
-pub struct TerminalNode<State: GameTreeState> {
-    state: State, // by reference?
-}
-
-impl<State: GameTreeState> TerminalNode<State> {
-    /// Creates and returns a new terminal node for the given state.
-    /// 
-    /// Note that the state is moved as part of the creation, and will not be valid after creation. Unless, of course, it can 
-    /// be copied, although be aware that that's a cost that arises from this constructor.
-    pub fn new(state: State) -> TerminalNode<State> {
-        TerminalNode { state }
-    }
-}
-
-impl<State: GameTreeState> GameTreeNode<State> for TerminalNode<State> {
-    /// Returns a reference to the state for this node.
-    fn state(&self) -> &State {
-        &self.state
-    }
-
-    /// Returns an optional reference to a vector of this node's children. Note that because this node is terminal, this 
-    /// method always returns `None`.
-    fn children(&self) -> Option<&Vec<Box<dyn GameTreeNode<State>>>> {
-        None
-    }
-
-    /// Returns the utility of this node's (possibly terminal) state, calculated according to the state's evaluation function. 
-    /// Note that the optional action will always be `None` because this is a terminal state.
-    fn utility(&self) -> (State::Utility, Option<State::Action>) {
-        (self.state.eval(), None)
-    }
 }
 
 
@@ -188,7 +190,7 @@ mod tests {
         }
     }
 
-    impl GameTreeState for CountToTenState {
+    impl AdversarialSearchState for CountToTenState {
         type Action = CountToTenAction;
         type Utility = i32;
 

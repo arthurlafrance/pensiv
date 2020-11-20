@@ -1,6 +1,8 @@
 use std::cmp::{Eq, Ord, Ordering};
 use std::convert::Into;
 
+// does this module need documentation? probably
+// does it needs tests? also probably
 
 #[derive(Debug, PartialEq, PartialOrd, Copy, Clone)]
 pub struct ComparableFloat(f64);
