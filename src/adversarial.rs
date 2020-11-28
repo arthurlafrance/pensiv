@@ -39,13 +39,13 @@
 
 
 pub struct AdversarialSearchAgent<'a, State: AdversarialSearchState> {
-    strategy: &'a dyn Fn(&State) -> Box<dyn AdversarialSearchNode<State>>,
-    adversaries: Vec<&'a dyn Fn(&State) -> Box<dyn AdversarialSearchNode<State>>>,
+    strategy: &'a fn(State) -> Box<dyn AdversarialSearchNode<State>>,
+    adversaries: Vec<&'a fn(State) -> Box<dyn AdversarialSearchNode<State>>>,
     max_depth: Option<usize>, // NOTE: depth is defined slightly differently than the traditional tree depth property
 }
 
-impl<'a, State: AdversarialSearchState> AdversarialSearchAgent<'a, State> {
-    pub fn new(strategy: &'a dyn Fn(&State) -> Box<dyn AdversarialSearchNode<State>>, adversaries: Vec<&'a dyn Fn(&State) -> Box<dyn AdversarialSearchNode<State>>>, max_depth: Option<usize>) -> AdversarialSearchAgent<'a, State> {
+impl<'a, State: AdversarialSearchState + 'static> AdversarialSearchAgent<'a, State> {
+    pub fn new(strategy: &'a fn(State) -> Box<dyn AdversarialSearchNode<State>>, adversaries: Vec<&'a fn(State) -> Box<dyn AdversarialSearchNode<State>>>, max_depth: Option<usize>) -> AdversarialSearchAgent<'a, State> {
         if let Some(d) = max_depth {
             if d <= 0 {
                 panic!("Adversarial search max depth must be a positive integer (or None)");
@@ -71,26 +71,33 @@ impl<'a, State: AdversarialSearchState> AdversarialSearchAgent<'a, State> {
     }
 
     fn make_node(&self, state: State, depth: usize, layer: usize) -> Box<dyn AdversarialSearchNode<State>> {
-        let mut node = if layer == 0 {
-            (self.strategy)(&state)
+        // if node should be terminal, make terminal
+        // else, make according to strategy and add children
+        if state.is_terminal() || (self.max_depth != None && depth == self.max_depth.unwrap()) {
+            return TerminalNode::new(state);
         }
         else {
-            self.adversaries[layer - 1](&state)
-        };
+            let mut node = if layer == 0 {
+                (self.strategy)(state)
+            }
+            else {
+                self.adversaries[layer - 1](state)
+            };
 
-        if self.max_depth == None || depth < self.max_depth.unwrap() {
-            for action in state.actions() {
-                let successor = state.successor(action);
+            for action in node.state().actions() {
+                let successor = node.state().successor(action);
 
                 let next_layer = layer + 1;
                 let next_depth = if next_layer < self.adversaries.len() + 1 { depth } else { depth + 1 };
                 let child = self.make_node(successor, next_depth, next_layer % (self.adversaries.len() + 1));
 
-                node.children().push(child);
+                if let Some(children) = node.children() {
+                    children.push(child);
+                }
             }
-        }
 
-        node
+            return node;
+        }
     }
 }
 
@@ -130,7 +137,9 @@ pub trait AdversarialSearchState {
     /// Returns `true` if the state is a terminal state, `false` otherwise.
     /// 
     /// The default implementation of this method simply checks to see if there are any legal actions that can be taken; 
-    /// override this if you would like to modify this functionality.
+    /// override this if you would like to modify this functionality. Note that if this method returns `true`, it's expected that `self.actions()` 
+    /// returns a non-empty list. Conversely, if it returns `false`, `self.actions()` should return an empty list, and will be treated as such in 
+    /// adversarial search.
     fn is_terminal(&self) -> bool {
         self.actions().len() == 0
     }
@@ -144,6 +153,12 @@ pub trait AdversarialSearchState {
 /// type to use in a game tree, in which case you should implement this trait for that type (see also `AdversarialSearchStrategy` if 
 /// doing so).
 pub trait AdversarialSearchNode<State: AdversarialSearchState> {
+    // /// Creates and returns a new adversarial search node for the given state.
+    // /// 
+    // /// Use this method as a public constructor for each node type; it takes in a state and creates the corresponding node (typically with no 
+    // /// children upon construction).
+    // fn new(state: State) -> Box<dyn AdversarialSearchNode<State>>;
+
     /// Returns a reference to the state stored at this node.
     /// 
     /// This method is typically simply an accessor method of the node's internal state field.
@@ -151,22 +166,50 @@ pub trait AdversarialSearchNode<State: AdversarialSearchState> {
 
     /// Returns a reference to a vector containing the node's children, if they exist.
     /// 
-    /// Returns `None` if the node is terminal, i.e. if it has no children, otherwise return a reference to them.
+    /// Returns `None` if the node has no children, otherwise return a reference to them. Note that there is a subtle difference between a node that
+    /// _can't_ have children and a node that _doesn't_ have children. This method should return `None` only if it's unable to have children (perhaps 
+    /// the only practical purpose of this is terminal nodes, but the subtle difference is important to keep in mind).
     /// 
-    /// Note that a node's children don't need to be of the same type; as long as they use the same state as this node, 
+    /// Also note that a node's children don't need to be of the same type; as long as they use the same state as this node, 
     /// they're valid children. As a concrete example, this means that a minimizer node can have maximizer nodes as its 
     /// children, as long as all nodes are generic to the same state.
-    fn children(&mut self) -> &mut Vec<Box<dyn AdversarialSearchNode<State>>>;
+    fn children(&mut self) -> Option<&mut Vec<Box<dyn AdversarialSearchNode<State>>>>;
 
     /// Returns the node's utility and the action required to achieve that utility, if it exists.
     /// 
-    /// Note that the optional action returned will be `None` if the node is a terminal node, otherwise it will correctly 
+    /// Note that the optional action returned will be `None` if there is no action required to achieve the returned utility, otherwise it will 
     /// return the action required to achieve the returned utility.
     /// 
     /// How a node's utility is calculated is determined by the type of node in this method. For example, minimizer nodes 
     /// will minimize the utility of their children; maximizer nodes do the opposite. Thus, this method is how to determine 
     /// the method by which a node calculates its own usility, potentially relative to its children's utility.
     fn utility(&self) -> (State::Utility, Option<State::Action>);
+}
+
+
+struct TerminalNode<State: AdversarialSearchState> {
+    state: State,
+}
+
+// NOTE: I don't like that it's bound to 'static
+impl<State: 'static + AdversarialSearchState> TerminalNode<State> {
+    fn new(state: State) -> Box<dyn AdversarialSearchNode<State>> {
+        Box::new(TerminalNode { state })
+    }
+}
+
+impl<State: AdversarialSearchState> AdversarialSearchNode<State> for TerminalNode<State> {
+    fn state(&self) -> &State {
+        &self.state
+    }
+
+    fn children(&mut self) -> Option<&mut Vec<Box<dyn AdversarialSearchNode<State>>>> {
+        None
+    }
+
+    fn utility(&self) -> (State::Utility, Option<State::Action>) {
+        (self.state.eval(), None)
+    }
 }
 
 
@@ -226,20 +269,5 @@ mod tests {
     enum CountToTenAction {
         Increment,
         Done,
-    }
-
-
-    #[test]
-    fn terminal_node_created_with_correct_properties() {
-        let state = CountToTenState::new(8, true);
-        let node = TerminalNode::new(state);
-
-        assert_eq!(*node.state(), state);
-        assert_eq!(node.utility(), (state.eval(), None));
-
-        match node.children() {
-            Some(_) => panic!("found children for terminal node"),
-            None => {},
-        };
     }
 }
