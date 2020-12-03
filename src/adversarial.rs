@@ -187,12 +187,17 @@ pub trait AdversarialSearchNode<State: AdversarialSearchState> {
 }
 
 
+/// A terminal (i.e. leaf) node in the game tree.
+/// 
+/// `TerminalNode` is private to the module because it has no practical value to users -- its only use is to internally represent terminal nodes in 
+/// the game tree; third-party users can't (and shouldn't) create artibitrary terminal nodes in the game tree, therefore this functionality is not publicly exposed.
 struct TerminalNode<State: AdversarialSearchState> {
     state: State,
 }
 
 // NOTE: I don't like that it's bound to 'static
 impl<State: 'static + AdversarialSearchState> TerminalNode<State> {
+    /// Creates and returns a new terminal node for the given state.
     fn new(state: State) -> Box<dyn AdversarialSearchNode<State>> {
         Box::new(TerminalNode { state })
     }
@@ -203,22 +208,33 @@ impl<State: AdversarialSearchState> AdversarialSearchNode<State> for TerminalNod
         &self.state
     }
 
+    /// Return an optional reference to a vector containing the node's children. Since this node is terminal, always returns `None`.
     fn children(&mut self) -> Option<&mut Vec<Box<dyn AdversarialSearchNode<State>>>> {
         None
     }
 
+    /// Determine and return the utility of the node, and return the action required to achieve that utility, if it exists.
+    /// 
+    /// Since this node is terminal, the returned utility is the utility of the node's state as determined by the state's evaluation function; the 
+    /// returned action is always `None`.
     fn utility(&self) -> (State::Utility, Option<State::Action>) {
         (self.state.eval(), None)
     }
 }
 
 
+/// A minimizer node in the game tree.
+/// 
+/// This node minimizes the utilities of its children (regardless of how they're determined) to determine its own utility. To that end, its generic 
+/// state must be comparable, i.e. it must implement `PartialOrd`.
 pub struct MinimizerNode<State: AdversarialSearchState> where State::Utility: PartialOrd {
     state: State,
     children: Vec<Box<dyn AdversarialSearchNode<State>>>,
 }
 
 impl<State: 'static + AdversarialSearchState> MinimizerNode<State> where State::Utility: PartialOrd {
+    /// Creates and returns a new minimizer node for the given state. Note that nodes are initialized with no children; they are added sequentially 
+    /// during game tree creation.
     fn new(state: State) -> Box<dyn AdversarialSearchNode<State>> {
         Box::new(MinimizerNode { state, children: vec![] })
     }
@@ -233,6 +249,11 @@ impl<State: AdversarialSearchState> AdversarialSearchNode<State> for MinimizerNo
         Some(&mut self.children)
     }
 
+    /// Determines and returns the utility of the node and the action required to achieve that utility.
+    /// 
+    /// For minimizer nodes, utility is defined as the minimum utility among the node's children (also note that minimizer nodes are guaranteed to 
+    /// have children because they aren't `TerminalNode`s). Additionally, the returned action is guaranteed to exist, again because the node isn't 
+    /// terminal.
     fn utility(&self) -> (State::Utility, Option<State::Action>) {
         let (mut min_utility, mut optimal_action) = self.children[0].utility();
 
