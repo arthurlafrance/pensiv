@@ -213,57 +213,95 @@ impl<State: AdversarialSearchState> AdversarialSearchNode<State> for TerminalNod
 }
 
 
+pub struct MinimizerNode<State: AdversarialSearchState> where State::Utility: PartialOrd {
+    state: State,
+    children: Vec<Box<dyn AdversarialSearchNode<State>>>,
+}
+
+impl<State: 'static + AdversarialSearchState> MinimizerNode<State> where State::Utility: PartialOrd {
+    fn new(state: State) -> Box<dyn AdversarialSearchNode<State>> {
+        Box::new(MinimizerNode { state, children: vec![] })
+    }
+}
+
+impl<State: AdversarialSearchState> AdversarialSearchNode<State> for MinimizerNode<State> where State::Utility: PartialOrd {
+    fn state(&self) -> &State {
+        &self.state
+    }
+
+    fn children(&mut self) -> Option<&mut Vec<Box<dyn AdversarialSearchNode<State>>>> {
+        Some(&mut self.children)
+    }
+
+    fn utility(&self) -> (State::Utility, Option<State::Action>) {
+        let (mut min_utility, mut optimal_action) = self.children[0].utility();
+
+        for child in self.children[1..].iter() {
+            let (utility, action) = child.utility();
+
+            if utility < min_utility {
+                min_utility = utility;
+                optimal_action = action;
+            }
+        }
+
+        (min_utility, optimal_action)
+    }
+}
+
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[derive(Clone, Copy, Debug, PartialEq)]
-    struct CountToTenState {
+    struct CountToTenState<'a> {
         count: i32,
         done: bool,
+        _test: &'a Vec<i32>,
     }
 
-    impl CountToTenState {
-        pub fn start() -> CountToTenState {
-            CountToTenState { count: 0, done: false }
-        }
+    impl<'a> CountToTenState<'a> {
+        // pub fn start() -> CountToTenState {
+        //     CountToTenState { count: 0, done: false, _test:  }
+        // }
 
-        pub fn new(count: i32, done: bool) -> CountToTenState {
-            CountToTenState { count: count, done: done }
-        }
-    }
-
-    impl AdversarialSearchState for CountToTenState {
-        type Action = CountToTenAction;
-        type Utility = i32;
-
-        fn actions(&self) -> Vec<Self::Action> {
-            if self.done {
-                Vec::new()
-            }
-            else if self.count < 10 {
-                vec![CountToTenAction::Increment, CountToTenAction::Done]
-            }
-            else {
-                vec![CountToTenAction::Done]
-            }
-        }
-
-        fn successor(&self, action: Self::Action) -> Self {            
-            match action {
-                CountToTenAction::Increment => CountToTenState::new(self.count + 1, false),
-                CountToTenAction::Done => CountToTenState::new(self.count, true),
-            }
-        }
-
-        fn eval(&self) -> Self::Utility {
-            self.count
-        }
-
-        fn is_terminal(&self) -> bool {
-            self.done
+        pub fn new(count: i32, done: bool, r: &Vec<i32>) -> CountToTenState {
+            CountToTenState { count, done, _test: r }
         }
     }
+
+    // impl<'a> AdversarialSearchState for CountToTenState<'a> {
+    //     type Action = CountToTenAction;
+    //     type Utility = i32;
+
+    //     fn actions(&self) -> Vec<Self::Action> {
+    //         if self.done {
+    //             Vec::new()
+    //         }
+    //         else if self.count < 10 {
+    //             vec![CountToTenAction::Increment, CountToTenAction::Done]
+    //         }
+    //         else {
+    //             vec![CountToTenAction::Done]
+    //         }
+    //     }
+
+    //     fn successor(&self, action: Self::Action) -> Self {            
+    //         match action {
+    //             CountToTenAction::Increment => CountToTenState::new(self.count + 1, false, self._test),
+    //             CountToTenAction::Done => CountToTenState::new(self.count, true, self._test),
+    //         }
+    //     }
+
+    //     fn eval(&self) -> Self::Utility {
+    //         self.count
+    //     }
+
+    //     fn is_terminal(&self) -> bool {
+    //         self.done
+    //     }
+    // }
 
     #[derive(Clone, Copy, Debug, PartialEq)]
     enum CountToTenAction {
