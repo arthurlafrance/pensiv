@@ -17,15 +17,15 @@ In order to use `pensiv` as a Cargo dependency, include it in your `Cargo.toml` 
 pensiv = { git = "https://github.com/arthurlafrance/pensiv" )
 ```
 
-Note that `pensiv` is currently not published to `crates.io`, so the above statement will essentially become obsolete when that happens. Also worth noting is that  documentation of the crate will be available once it's published and ready for use.
+Note that `pensiv` is currently not published to `crates.io`, so the above statement will essentially become obsolete when that happens (unless, of course, you mean to pull from this repository rather than `crates.io`). Also worth noting is that documentation of the crate will be available once it's published and ready for use.
 
 ## Contributing
 As with the previous section, `pensiv` is by no means mature, and is currently mostly a place for my personal experimentation. That said, those so inclined are welcome to use this code for their own personal experimentation. Note that any pull requests that are submitted will be accepeted at my discretion. Also note that I encourage anyone who finds issues with the crate to open an issue to let me know about it; I'm always looking to improve the quality of my code and my coding skills, and that's an important step toward this goal.
 
 ## Still to Come
-Evidently, `pensiv` hardly lives up to its description as an AI & machine learning library. In the immediate future, it's my goal to add support for:
-* Basic classification techniques, i.e. naive Bayes classification
+Evidently, `pensiv` hardly lives up to its description as an AI & machine learning library. In the near future, it's my goal to add support for:
 * Adversarial search & game trees
+* Foundational techniques in classification, regression, & clustering
 * Basic reinforcement learning techniques
 
 This list will undoubtedly expand in the future as well.
