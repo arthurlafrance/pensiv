@@ -254,6 +254,8 @@ impl<State: AdversarialSearchState> AdversarialSearchNode<State> for MinimizerNo
     /// For minimizer nodes, utility is defined as the minimum utility among the node's children (also note that minimizer nodes are guaranteed to 
     /// have children because they aren't `TerminalNode`s). Additionally, the returned action is guaranteed to exist, again because the node isn't 
     /// terminal.
+    /// 
+    /// Note that this method returns the _first_ action that achieves optimal utility, that is, in the event of a tie, the optimal action is not changed.
     fn utility(&self) -> (State::Utility, Option<State::Action>) {
         let (mut min_utility, mut optimal_action) = self.children[0].utility();
 
@@ -267,6 +269,56 @@ impl<State: AdversarialSearchState> AdversarialSearchNode<State> for MinimizerNo
         }
 
         (min_utility, optimal_action)
+    }
+}
+
+
+/// A maximizer node in the game tree.
+/// 
+/// This node determines its optimal utility as the maximum utility between its children. In order to perform this comparison, the generic type 
+/// parameter's associated type `State::Utility` must implement `PartialOrd`.
+pub struct MaximizerNode<State: AdversarialSearchState> where State::Utility: PartialOrd {
+    state: State,
+    children: Vec<Box<dyn AdversarialSearchNode<State>>>,
+}
+
+impl<State: 'static + AdversarialSearchState> MaximizerNode<State> where State::Utility: PartialOrd {
+    /// Creates and returns a new maximizer node for the given state. Note that nodes are initialized with no children; they are added sequentially 
+    /// during game tree creation.
+    fn new(state: State) -> Box<dyn AdversarialSearchNode<State>> {
+        Box::new(MaximizerNode { state, children: vec![] })
+    }
+}
+
+impl<State: AdversarialSearchState> AdversarialSearchNode<State> for MaximizerNode<State> where State::Utility: PartialOrd {
+    fn state(&self) -> &State {
+        &self.state
+    }
+
+    fn children(&mut self) -> Option<&mut Vec<Box<dyn AdversarialSearchNode<State>>>> {
+        Some(&mut self.children)
+    }
+
+    /// Determines and returns the utility of the node and the action required to achieve that utility.
+    /// 
+    /// For maximizer nodes, utility is defined as the maximum utility among the node's children (also note that maximizer nodes are guaranteed to 
+    /// have children because they aren't `TerminalNode`s). Additionally, the returned action is guaranteed to exist, again because the node isn't 
+    /// terminal.
+    /// 
+    /// Note that this method returns the _first_ action that achieves optimal utility, that is, in the event of a tie, the optimal action is not changed.
+    fn utility(&self) -> (State::Utility, Option<State::Action>) {
+        let (mut max_utility, mut optimal_action) = self.children[0].utility();
+
+        for child in self.children[1..].iter() {
+            let (utility, action) = child.utility();
+
+            if utility > max_utility {
+                max_utility = utility;
+                optimal_action = action;
+            }
+        }
+
+        (max_utility, optimal_action)
     }
 }
 
