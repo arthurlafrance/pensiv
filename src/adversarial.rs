@@ -38,6 +38,9 @@
 //! TBD
 
 
+use num_traits::Num;
+
+
 pub struct AdversarialSearchAgent<'a, State: AdversarialSearchState> {
     strategy: &'a fn(State) -> Box<dyn AdversarialSearchNode<State>>,
     adversaries: Vec<&'a fn(State) -> Box<dyn AdversarialSearchNode<State>>>,
@@ -319,6 +322,32 @@ impl<State: AdversarialSearchState> AdversarialSearchNode<State> for MaximizerNo
         }
 
         (max_utility, optimal_action)
+    }
+}
+
+
+pub struct ChanceNode<State: AdversarialSearchState> where State::Utility: Num {
+    state: State,
+    children: Vec<Box<dyn AdversarialSearchNode<State>>>,
+}
+
+impl<State: 'static + AdversarialSearchState> ChanceNode<State> where State::Utility: Num {
+    pub fn new(state: State) -> Box<dyn AdversarialSearchNode<State>> {
+        Box::new(ChanceNode { state, children: vec![] })
+    }
+}
+
+impl<State: AdversarialSearchState> AdversarialSearchNode<State> for ChanceNode<State> where State::Utility: Num {
+    fn state(&self) -> &State {
+        &self.state
+    }
+
+    fn children(&mut self) -> Option<&mut Vec<Box<dyn AdversarialSearchNode<State>>>> {
+        Some(&mut self.children)
+    }
+
+    fn utility(&self) -> (State::Utility, Option<State::Action>) {
+        (self.state.eval(), None) // NOTE: stub
     }
 }
 
