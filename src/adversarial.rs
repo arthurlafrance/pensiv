@@ -149,6 +149,33 @@ pub trait AdversarialSearchState {
 }
 
 
+/// A successor in the adversarial search tree.
+/// 
+/// Represents a path from state to successor in the game tree. It holds the successor state and the action required to travel to that successor. This struct 
+/// is mainly intended for internal use in adversarial search, but is exposed for compatibility with `AdversarialSearchNode`.
+pub struct AdversarialSearchSuccessor<State: AdversarialSearchState> {
+    action: State::Action,
+    child: Box<dyn AdversarialSearchNode<State>>,
+}
+
+impl<State: AdversarialSearchState> AdversarialSearchSuccessor<State> {
+    /// Create and return a new successor.
+    pub fn new(action: State::Action, child: Box<dyn AdversarialSearchNode<State>>) -> AdversarialSearchSuccessor<State> {
+        AdversarialSearchSuccessor { action, child }
+    }
+
+    /// Return a reference to the action leading to the successor state.
+    pub fn action(&self) -> &State::Action {
+        &self.action
+    }
+
+    /// Return a reference to the child node.
+    pub fn child(&self) -> &dyn AdversarialSearchNode<State> {
+        &(*(self.child)) // NOTE: this is kinda jank syntactically, is it acceptable?
+    }
+}
+
+
 /// Base trait for all nodes in a game tree.
 /// 
 /// This trait is used for defining a general public interface for nodes in a game tree (e.g. minimizer and maximizer nodes). 
