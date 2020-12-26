@@ -45,13 +45,13 @@ use std::marker::PhantomData;
 
 
 pub struct AdversarialSearchAgent<'a, State: AdversarialSearchState> {
-    strategy: &'a fn(State, Vec<AdversarialSearchSuccessor<'a, State>>) -> Box<dyn AdversarialSearchNode<'a, State> + 'a>,
-    adversaries: Vec<&'a fn(State, Vec<AdversarialSearchSuccessor<'a, State>>) -> Box<dyn AdversarialSearchNode<'a, State> + 'a>>,
-    max_depth: Option<usize>, // NOTE: depth is defined slightly differently than the traditional tree depth property
+    strategy: fn(State, Vec<AdversarialSearchSuccessor<'a, State>>) -> Box<dyn AdversarialSearchNode<'a, State> + 'a>,
+    adversaries: Vec<fn(State, Vec<AdversarialSearchSuccessor<'a, State>>) -> Box<dyn AdversarialSearchNode<'a, State> + 'a>>,
+    max_depth: Option<usize>,
 }
 
 impl<'a, State: 'a + AdversarialSearchState> AdversarialSearchAgent<'a, State> {
-    pub fn new(strategy: &'a fn(State, Vec<AdversarialSearchSuccessor<'a, State>>) -> Box<dyn AdversarialSearchNode<'a, State> + 'a>, adversaries: Vec<&'a fn(State, Vec<AdversarialSearchSuccessor<'a, State>>) -> Box<dyn AdversarialSearchNode<'a, State> + 'a>>, max_depth: Option<usize>) -> AdversarialSearchAgent<'a, State> {
+    pub fn new(strategy: fn(State, Vec<AdversarialSearchSuccessor<'a, State>>) -> Box<dyn AdversarialSearchNode<'a, State> + 'a>, adversaries: Vec<fn(State, Vec<AdversarialSearchSuccessor<'a, State>>) -> Box<dyn AdversarialSearchNode<'a, State> + 'a>>, max_depth: Option<usize>) -> AdversarialSearchAgent<'a, State> {
         if let Some(d) = max_depth {
             if d <= 0 {
                 panic!("Adversarial search max depth must be a positive integer (or None)");
@@ -61,13 +61,25 @@ impl<'a, State: 'a + AdversarialSearchState> AdversarialSearchAgent<'a, State> {
         AdversarialSearchAgent { strategy, adversaries, max_depth }
     }
 
-    // pub fn minimax(adversaries: i32) -> AdversarialSearchAgent {
+    pub fn minimax(adversaries: usize, max_depth: Option<usize>) -> AdversarialSearchAgent<'a, State> where State::Utility: PartialOrd {
+        let adversary_strategies: Vec<fn(State, Vec<AdversarialSearchSuccessor<'a, State>>) -> Box<dyn AdversarialSearchNode<'a, State> + 'a>> = vec![MinimizerNode::<'a, State>::new; adversaries];
 
-    // }
+        AdversarialSearchAgent { 
+            strategy: MaximizerNode::<'a, State>::new as fn(State, Vec<AdversarialSearchSuccessor<'a, State>>) -> Box<dyn AdversarialSearchNode<'a, State> + 'a>,
+            adversaries: adversary_strategies, 
+            max_depth 
+        }
+    }
 
-    // pub fn expectimax(adversaries: i32) -> AdversarialSearchAgent {
+    pub fn expectimax(adversaries: usize, max_depth: Option<usize>) -> AdversarialSearchAgent<'a, State> where State::Utility: PartialOrd + Num {
+        let adversary_strategies: Vec<fn(State, Vec<AdversarialSearchSuccessor<'a, State>>) -> Box<dyn AdversarialSearchNode<'a, State> + 'a>> = vec![ChanceNode::<'a, State>::new; adversaries];
 
-    // }
+        AdversarialSearchAgent { 
+            strategy: MaximizerNode::<'a, State>::new as fn(State, Vec<AdversarialSearchSuccessor<'a, State>>) -> Box<dyn AdversarialSearchNode<'a, State> + 'a>,
+            adversaries: adversary_strategies, 
+            max_depth 
+        }
+    }
 
     pub fn action(&self, state: State) -> Option<State::Action> {
         let root = self.make_node(state, 0);
@@ -121,7 +133,8 @@ impl<'a, State: 'a + AdversarialSearchState> AdversarialSearchAgent<'a, State> {
 pub trait AdversarialSearchState {
     /// Describes a legal action that can be taken during the game.
     /// 
-    /// This type must implement the `Clone` trait so that it can be duplicated within adversarial search
+    /// It's important to note that actions should be lightweight -- they should be small types that are easily copied rather than moved. 
+    /// As such, the `Action` associated type must implement the `Copy` trait.
     type Action: Copy;
 
     /// Describes the utility achieved at the end of a game.
