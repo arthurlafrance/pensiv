@@ -86,7 +86,7 @@ impl<'a, State: 'a + AdversarialSearchState> AdversarialSearchAgent<'a, State> {
         let (_, action) = root.utility();
 
         match action {
-            Some(a) => Some(a.clone()),
+            Some(a) => Some(*a),
             None => None,
         }
     }
