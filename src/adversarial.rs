@@ -88,11 +88,11 @@ impl<'a, State: 'a + AdversarialSearchState> AdversarialSearchAgent<'a, State> {
         else {
             let mut successors = vec![];
 
-            for action in state.actions().iter().cloned() {
+            for action in state.actions().iter() {
                 let successor_state = state.successor(action);
                 let child = self.make_node(successor_state, depth + 1);
 
-                let successor = AdversarialSearchSuccessor::new(action.clone(), child);
+                let successor = AdversarialSearchSuccessor::new(*action, child);
                 successors.push(successor);
             }
 
@@ -122,7 +122,7 @@ pub trait AdversarialSearchState {
     /// Describes a legal action that can be taken during the game.
     /// 
     /// This type must implement the `Clone` trait so that it can be duplicated within adversarial search
-    type Action: Clone;
+    type Action: Copy;
 
     /// Describes the utility achieved at the end of a game.
     /// 
@@ -131,7 +131,7 @@ pub trait AdversarialSearchState {
     type Utility;
 
     /// Returns a vector containing the legal actions that can be taken at the current state.
-    fn actions(&self) -> Vec<&Self::Action>;
+    fn actions(&self) -> Vec<Self::Action>;
 
     // TODO: i think this should return a result to indicate legality of action
     /// Returns the successor state that arises from taking the given action at the current state.
