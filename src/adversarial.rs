@@ -49,8 +49,8 @@ use std::marker::PhantomData;
 /// `AdversarialSearchAgent` is parameterized by the type `State`, which represents the state of the adversarial search problem and must 
 /// implement `AdversarialSearchState`.
 pub struct AdversarialSearchAgent<'a, State: AdversarialSearchState> {
-    strategy: fn(State, Vec<AdversarialSearchSuccessor<'a, State>>) -> Box<dyn AdversarialSearchNode<'a, State> + 'a>,
-    adversaries: Vec<fn(State, Vec<AdversarialSearchSuccessor<'a, State>>) -> Box<dyn AdversarialSearchNode<'a, State> + 'a>>,
+    policies: Vec<AdversarialSearchPolicy<'a, State>>,
+    n_policies: usize,
     max_depth: Option<usize>,
 }
 
@@ -58,45 +58,51 @@ impl<'a, State: 'a + AdversarialSearchState> AdversarialSearchAgent<'a, State> {
     /// Creates and returns a new adversarial search agent.
     /// 
     /// `AdversarialSearchAgent` was designed to provide flexible game tree creation and central adversarial search evaluation regardless of 
-    /// game tree layout. This is accomplished by specifying the agent's "strategy", i.e. the type of node that the agent uses, as well as the 
+    /// game tree layout. This is accomplished by specifying the agent's "policy", i.e. the type of node that the agent uses, as well as the 
     /// strategies of its adversaries. In this way, the game tree is organized into layers whose node type is specified by the factory function 
     /// parameters. Finally, an optional max depth can be specified to upper-bound adversarial search at some maximum depth in the game tree.
-    pub fn new(strategy: fn(State, Vec<AdversarialSearchSuccessor<'a, State>>) -> Box<dyn AdversarialSearchNode<'a, State> + 'a>, adversaries: Vec<fn(State, Vec<AdversarialSearchSuccessor<'a, State>>) -> Box<dyn AdversarialSearchNode<'a, State> + 'a>>, max_depth: Option<usize>) -> AdversarialSearchAgent<'a, State> {
-        if let Some(d) = max_depth {
-            if d <= 0 {
-                panic!("Adversarial search max depth must be a positive integer (or None)");
-            }
-        }
+    pub fn new(policies: Vec<AdversarialSearchPolicy<'a, State>>, max_depth: Option<usize>) -> AdversarialSearchAgent<State> {
+        let n_policies = policies.len();
 
-        AdversarialSearchAgent { strategy, adversaries, max_depth }
+        AdversarialSearchAgent { policies, n_policies, max_depth }
     }
 
     /// Creates and returns a minimax agent.
     /// 
     /// This is a convenience function for creating an adversarial search agent whose adversaries are assumed to use minizer nodes, and the agent is assumed to use maximizer nodes. Thus, 
     /// the function requires you to specify the number of such adversaries as well as an optional maximum depth.
-    pub fn minimax(adversaries: usize, max_depth: Option<usize>) -> AdversarialSearchAgent<'a, State> where State::Utility: PartialOrd {
-        let adversary_strategies: Vec<fn(State, Vec<AdversarialSearchSuccessor<'a, State>>) -> Box<dyn AdversarialSearchNode<'a, State> + 'a>> = vec![MinimizerNode::<'a, State>::new; adversaries];
+    pub fn minimax(agents: Vec<State::Agent>, max_depth: Option<usize>) -> AdversarialSearchAgent<'a, State> where State::Utility: PartialOrd {
+        let n_policies = agents.len();
+        let mut policies = Vec::with_capacity(n_policies);
 
-        AdversarialSearchAgent { 
-            strategy: MaximizerNode::<'a, State>::new as fn(State, Vec<AdversarialSearchSuccessor<'a, State>>) -> Box<dyn AdversarialSearchNode<'a, State> + 'a>,
-            adversaries: adversary_strategies, 
-            max_depth 
+        let agent_policy = AdversarialSearchPolicy::new(agents[0], MaximizerNode::new);
+        policies.push(agent_policy);
+
+        for agent in agents[1..].iter() {
+            let policy = AdversarialSearchPolicy::new(*agent, MinimizerNode::new);
+            policies.push(policy);
         }
+
+        AdversarialSearchAgent { policies, n_policies, max_depth }
     }
 
     /// Creates and returns a expectimax agent.
     /// 
     /// Like `minimax()`, this is a convenience function; it creates an adversarial search agent whose adversaries are assumed to use chance nodes, and the agent is assumed to use maximizer nodes. Thus, 
     /// the function requires you to specify the number of such adversaries as well as an optional maximum depth.
-    pub fn expectimax(adversaries: usize, max_depth: Option<usize>) -> AdversarialSearchAgent<'a, State> where State::Utility: PartialOrd + Num {
-        let adversary_strategies: Vec<fn(State, Vec<AdversarialSearchSuccessor<'a, State>>) -> Box<dyn AdversarialSearchNode<'a, State> + 'a>> = vec![ChanceNode::<'a, State>::new; adversaries];
+    pub fn expectimax(agents: Vec<State::Agent>, max_depth: Option<usize>) -> AdversarialSearchAgent<'a, State> where State::Utility: PartialOrd + Num {
+        let n_policies = agents.len();
+        let mut policies = Vec::with_capacity(n_policies);
 
-        AdversarialSearchAgent { 
-            strategy: MaximizerNode::<'a, State>::new as fn(State, Vec<AdversarialSearchSuccessor<'a, State>>) -> Box<dyn AdversarialSearchNode<'a, State> + 'a>,
-            adversaries: adversary_strategies, 
-            max_depth 
+        let agent_policy = AdversarialSearchPolicy::new(agents[0], MaximizerNode::new);
+        policies.push(agent_policy);
+
+        for agent in agents[1..].iter() {
+            let policy = AdversarialSearchPolicy::new(*agent, ChanceNode::new);
+            policies.push(policy);
         }
+
+        AdversarialSearchAgent { policies, n_policies, max_depth }
     }
 
     /// Return the optimal action for the agent to take from the given state, if it exists.
@@ -107,7 +113,7 @@ impl<'a, State: 'a + AdversarialSearchState> AdversarialSearchAgent<'a, State> {
     /// Note that this method assumes that `state` is a state from which the agent acts first; all adversaries will act in the order that their strategies 
     /// were specified.
     pub fn action(&self, state: State) -> Option<State::Action> {
-        let root = self.make_node(state, 0);
+        let root = self.make_node(state, 0, 0);
         let (_, action) = root.utility();
 
         match action {
@@ -116,34 +122,53 @@ impl<'a, State: 'a + AdversarialSearchState> AdversarialSearchAgent<'a, State> {
         }
     }
 
-    fn make_node(&self, state: State, depth: usize) -> Box<dyn AdversarialSearchNode<'a, State> + 'a> {
+    fn make_node(&self, state: State, policy_index: usize, depth: usize) -> Box<dyn AdversarialSearchNode<'a, State> + 'a> {
         // if node should be terminal, make terminal
-        // else, make according to strategy and add successors
+        // else, make according to policy and add successors
         if state.is_terminal() || (self.max_depth != None && depth == self.max_depth.unwrap()) {
             TerminalNode::new(state)
         }
         else {
             let mut successors = vec![];
 
-            for action in state.actions().iter() {
-                let successor_state = state.successor(action);
-                let child = self.make_node(successor_state, depth + 1);
+            let policy = &self.policies[policy_index];
+            let agent = policy.agent();
+            let node_constructor = policy.node();
+
+            for action in state.actions(agent).iter() {
+                let successor_state = state.successor(agent, action);
+                let child = self.make_node(successor_state, (policy_index + 1) % self.n_policies, depth + 1);
 
                 let successor = AdversarialSearchSuccessor::new(*action, child);
                 successors.push(successor);
             }
 
-            let layer = depth % (self.adversaries.len() + 1);
-
-            let node_constructor = if layer == 0 {
-                self.strategy
-            }
-            else {
-                self.adversaries[layer - 1]
-            };
-
             node_constructor(state, successors)
         }
+    }
+}
+
+
+/// A policy in adversarial search, defined as an agent and the node type that models that agent.
+pub struct AdversarialSearchPolicy<'a, State: AdversarialSearchState> {
+    agent: State::Agent,
+    node: fn(State, Vec<AdversarialSearchSuccessor<'a, State>>) -> Box<dyn AdversarialSearchNode<'a, State> + 'a>,
+}
+
+impl<'a, State: AdversarialSearchState> AdversarialSearchPolicy<'a, State> {
+    /// Creates and returns a new policy object.
+    pub fn new(agent: State::Agent, node: fn(State, Vec<AdversarialSearchSuccessor<'a, State>>) -> Box<dyn AdversarialSearchNode<'a, State> + 'a>) -> AdversarialSearchPolicy<State> {
+        AdversarialSearchPolicy { agent, node }
+    }
+
+    /// Returns the agent to which the policy applies.
+    pub fn agent(&self) -> State::Agent {
+        self.agent
+    }
+
+    /// Returns a function pointer to the constructor for the policy's node type.
+    pub fn node(&self) -> fn(State, Vec<AdversarialSearchSuccessor<'a, State>>) -> Box<dyn AdversarialSearchNode<'a, State> + 'a> {
+        self.node
     }
 }
 
@@ -168,15 +193,20 @@ pub trait AdversarialSearchState {
     /// utility; as long as you know how to handle your own utility type, you're free to use whatever type you prefer.
     type Utility;
 
-    /// Returns a vector containing the legal actions that can be taken at the current state.
-    fn actions(&self) -> Vec<Self::Action>;
+    /// Describes the agents that are part of the state.
+    /// 
+    /// Like `Action`, this type should be lightweight enough to copy; in most cases, it will be either a small enum of an integral primitive type.
+    type Agent: Copy;
+
+    /// Returns a vector containing the legal actions that can be taken at the current state by the given agent.
+    fn actions(&self, agent: Self::Agent) -> Vec<Self::Action>;
 
     // TODO: i think this should return a result to indicate legality of action
-    /// Returns the successor state that arises from taking the given action at the current state.
+    /// Returns the successor state that arises from the given agent taking the given action at the current state.
     /// 
     /// Note that this function assumes that the action being taken is a valid action to take from the current state; any 
     /// violation of this precondition is undefined behavior, and can be handled at the developer's discretion.
-    fn successor(&self, action: &Self::Action) -> Self;
+    fn successor(&self, agent: Self::Agent, action: &Self::Action) -> Self;
 
     /// Returns the utility of the current state according to the evaluation function.
     /// 
@@ -185,13 +215,9 @@ pub trait AdversarialSearchState {
 
     /// Returns `true` if the state is a terminal state, `false` otherwise.
     /// 
-    /// The default implementation of this method simply checks to see if there are any legal actions that can be taken; 
-    /// override this if you would like to modify this functionality. Note that if this method returns `true`, it's expected that `self.actions()` 
-    /// returns a non-empty list. Conversely, if it returns `false`, `self.actions()` should return an empty list, and will be treated as such in 
-    /// adversarial search.
-    fn is_terminal(&self) -> bool {
-        self.actions().len() == 0
-    }
+    /// This method must guarantee to be true when the current state has no successors, and false otherwise; 
+    /// if not, adversarial search may not work as intended.
+    fn is_terminal(&self) -> bool;
 }
 
 
@@ -226,15 +252,8 @@ impl<'a, State: AdversarialSearchState> AdversarialSearchSuccessor<'a, State> {
 /// 
 /// This trait is used for defining a general public interface for nodes in a game tree (e.g. minimizer and maximizer nodes). 
 /// Its main relevance to developers is through the provided types that implement it, unless you want to create a custom node 
-/// type to use in a game tree, in which case you should implement this trait for that type (see also `AdversarialSearchStrategy` if 
-/// doing so).
+/// type to use in a game tree, in which case you should implement this trait for that type.
 pub trait AdversarialSearchNode<'a, State: AdversarialSearchState> {
-    // /// Creates and returns a new adversarial search node for the given state.
-    // /// 
-    // /// Use this method as a public constructor for each node type; it takes in a state and creates the corresponding node (typically with no 
-    // /// successors upon construction).
-    // fn new(state: State) -> Box<dyn AdversarialSearchNode<State>>;
-
     /// Returns a reference to the state stored at this node.
     /// 
     /// This method is typically simply an accessor method of the node's internal state field.
