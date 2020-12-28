@@ -1,13 +1,13 @@
 //! `pensiv` provides Rust implementations of various AI & machine learning techniques. 
 //!
 //! ## Highlights
-//! * TBA
+//! * Basic probability & statistics functionality
+//! * Adversarial search & game trees
 //! 
 //! ## Status
-//! This crate is in its infancy, and is constantly evolving and growing. The goal is to start expanding to machine learning 
-//! techniques in the immediate future. As such, none of the interfaces and implementations in this crate are set in stone; use 
-//! them as you please, but be aware that they are subject-to-change at `pensiv`'s discretion. Upon the first published release 
-//! of the crate, this will no longer be the case, however.
+//! `pensiv` is far from complete and thus far from stable. The APIs currently provided are not guaranteed to be stable from version to version 
+//! because of how new the crate is. Once `v1.0.0` is released (eventually), the APIs provided with that version will be guaranteed to be 
+//! stable for any `v1.x.y` version as is convention for semantic versioning.
 
 pub mod stats;
 pub mod adversarial;

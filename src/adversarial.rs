@@ -1,41 +1,26 @@
 //! Adversarial search & game trees.
 //! 
-//! This module provides methods for evaluating game trees through adversarial search. It was designed to allow for building 
-//! game trees flexibly, and to provide a central method for evaluating these flexible game trees through adversarial search. 
-//! This is accomplished by dividing the process of adversarial search into 3 steps:
+//! This module provides methods for evaluating game trees through adversarial search. It's designed to allow for building 
+//! game trees flexibly, and to provide a central method for evaluating these flexibly-created game trees through adversarial search. 
+//! This is accomplished by dividing the process of adversarial search into 2 steps:
 //! 
 //! NOTE: a complete example program using adversarial search is available [here](https://github.com/arthurlafrance/pensiv). 
 //! See it for examples of the code in this module.
 //!
 //! ## Defining an Adversarial Search Problem
 //! 
-//! In order to define an adversarial search problem, you must define the state that represents it. Specifically, you must 
-//! define a type to represent this state, and implement the `AdversarialSearchState` trait for it. This allows the custom state to be 
-//! used in `pensiv`'s provided adversarial search implementation.
-//! 
-//! In order to implement this trait, you must define a type to represent the actions that can be taken between states; 
-//! usually this takes the form of either a simple `struct` or enum. Additionally, you must define a method that returns 
-//! a vector of the actions that can legally be taken from a given state; this will be used to identify child nodes in the 
-//! game tree. You must also define a method that returns the successor state that arises from taking some action at some 
-//! state. This will be used in tandem with the previous method to link actions to successor, or in other words to link parent 
-//! and child nodes in the game tree.
-//! 
-//! In addition to defining a mechanism for performing actions, you must also define a mechanism for representing utility in 
-//! your adversarial search problem through the `Utility` associated type. This will be used to judge the utility of states, 
-//! or equivalently the utility of nodes in the game tree, in order to identify the optimal solution. In tandem with this, the 
-//! `eval()` method must be implemented in order to provide an evaluation function by which to judge the utility of a state; it 
-//! calculates and returns the utility of a given state according to the defined associated type.
-//!
-//! After defining a sufficient state representation for your adversarial search problem, you can move on to building your 
-//! adversarial search agent (describebd in the following section) which will be used to perform adversarial search.
-//! 
-//! ## Building an Adversarial Search Agent
-//! 
-//! TBD
+//! Before performing adversarial search, you must define an adversarial search problem using the tools provided by `pensiv`. The bulk of the 
+//! work associated with this is in defining the state representation for the problem. You must define a type that implements the 
+//! `AdversarialSearchState` trait which represents the state of the search problem, and in the process specify associated types representing 
+//! the agents, actions, and utility. After doing so, you'll be ready to perform adversarial search based on the defined state.
 //! 
 //! ## Performing Adversarial Search
 //! 
-//! TBD
+//! After defining a state representation, you can then perform adversarial search based on it. To do this, create an `AdversarialSearchAgent`
+//! by defining a configuration for the game tree, either using minimax and expectimax or by specifying a custom configuration using the various 
+//! nodes' constructor functions. After creating the agent, simply call the `optimal_action()` method to determine the optimal action for the 
+//! agent to take given some start state.
+//! 
 
 
 use num_traits::Num;
@@ -57,10 +42,15 @@ pub struct AdversarialSearchAgent<'a, State: AdversarialSearchState> {
 impl<'a, State: 'a + AdversarialSearchState> AdversarialSearchAgent<'a, State> {
     /// Creates and returns a new adversarial search agent.
     /// 
-    /// `AdversarialSearchAgent` was designed to provide flexible game tree creation and central adversarial search evaluation regardless of 
+    /// `AdversarialSearchAgent` is designed to provide flexible game tree creation and central adversarial search evaluation regardless of 
     /// game tree layout. This is accomplished by specifying the agent's "policy", i.e. the type of node that the agent uses, as well as the 
     /// strategies of its adversaries. In this way, the game tree is organized into layers whose node type is specified by the factory function 
     /// parameters. Finally, an optional max depth can be specified to upper-bound adversarial search at some maximum depth in the game tree.
+    /// 
+    /// Note that the array of policies must follow a specific order for adversarial search to work correctly: the agent's policy must be first, 
+    /// while the adversaries' policies can be second and after in whatever order you choose. This does mean that, because policies are evaluated 
+    /// sequentially, the adversaries' policies will be evaluated in the order in which they appear in the vector, so keep that in mind when using 
+    /// `AdversarialSearchAgent`.
     pub fn new(policies: Vec<AdversarialSearchPolicy<'a, State>>, max_depth: Option<usize>) -> AdversarialSearchAgent<State> {
         let n_policies = policies.len();
 
@@ -70,7 +60,11 @@ impl<'a, State: 'a + AdversarialSearchState> AdversarialSearchAgent<'a, State> {
     /// Creates and returns a minimax agent.
     /// 
     /// This is a convenience function for creating an adversarial search agent whose adversaries are assumed to use minizer nodes, and the agent is assumed to use maximizer nodes. Thus, 
-    /// the function requires you to specify the number of such adversaries as well as an optional maximum depth.
+    /// the function requires you to specify the agents to include in the game tree as well as an optional maximum depth.
+    /// 
+    /// Note that, just as the policies in the `new()` function appear in the vector in the order that they're evaluated, so too do the agents 
+    /// in the `agents` vector parameter. The player agent should appear first, and adversary agents should appear in whatever order you wish to 
+    /// evaluate them.
     pub fn minimax(agents: Vec<State::Agent>, max_depth: Option<usize>) -> AdversarialSearchAgent<'a, State> where State::Utility: PartialOrd {
         let n_policies = agents.len();
         let mut policies = Vec::with_capacity(n_policies);
@@ -89,7 +83,11 @@ impl<'a, State: 'a + AdversarialSearchState> AdversarialSearchAgent<'a, State> {
     /// Creates and returns a expectimax agent.
     /// 
     /// Like `minimax()`, this is a convenience function; it creates an adversarial search agent whose adversaries are assumed to use chance nodes, and the agent is assumed to use maximizer nodes. Thus, 
-    /// the function requires you to specify the number of such adversaries as well as an optional maximum depth.
+    /// the function requires you to specify the agents to include in the game tree as well as an optional maximum depth.
+    /// 
+    /// Note that, just as the agents in the `minimax()` function appear in the vector in the order that they're evaluated, so too do the agents 
+    /// in the `agents` vector parameter. The player agent should appear first, and adversary agents should appear in whatever order you wish to 
+    /// evaluate them.
     pub fn expectimax(agents: Vec<State::Agent>, max_depth: Option<usize>) -> AdversarialSearchAgent<'a, State> where State::Utility: PartialOrd + Num {
         let n_policies = agents.len();
         let mut policies = Vec::with_capacity(n_policies);
@@ -112,14 +110,11 @@ impl<'a, State: 'a + AdversarialSearchState> AdversarialSearchAgent<'a, State> {
     /// 
     /// Note that this method assumes that `state` is a state from which the agent acts first; all adversaries will act in the order that their strategies 
     /// were specified.
-    pub fn action(&self, state: State) -> Option<State::Action> {
+    pub fn optimal_action(&self, state: State) -> Option<State::Action> {
         let root = self.make_node(state, 0, 0);
         let (_, action) = root.utility();
 
-        match action {
-            Some(a) => Some(*a),
-            None => None,
-        }
+        action
     }
 
     fn make_node(&self, state: State, policy_index: usize, depth: usize) -> Box<dyn AdversarialSearchNode<'a, State> + 'a> {
@@ -149,7 +144,7 @@ impl<'a, State: 'a + AdversarialSearchState> AdversarialSearchAgent<'a, State> {
 }
 
 
-/// A policy in adversarial search, defined as an agent and the node type that models that agent.
+/// A policy in adversarial search: an agent and the node type that models it.
 pub struct AdversarialSearchPolicy<'a, State: AdversarialSearchState> {
     agent: State::Agent,
     node: fn(State, Vec<AdversarialSearchSuccessor<'a, State>>) -> Box<dyn AdversarialSearchNode<'a, State> + 'a>,
@@ -187,16 +182,16 @@ pub trait AdversarialSearchState {
     /// As such, the `Action` associated type must implement the `Copy` trait.
     type Action: Copy;
 
+    /// Describes the agents that are part of the state.
+    /// 
+    /// Like `Action`, this type should be lightweight enough to copy; in most cases, it will be either a small enum or an integral primitive type.
+    type Agent: Copy;
+
     /// Describes the utility achieved at the end of a game.
     /// 
     /// Usually this is either a numeric value or a tuple of values, but `pensiv` provides flexibility as to how to represent 
     /// utility; as long as you know how to handle your own utility type, you're free to use whatever type you prefer.
     type Utility;
-
-    /// Describes the agents that are part of the state.
-    /// 
-    /// Like `Action`, this type should be lightweight enough to copy; in most cases, it will be either a small enum of an integral primitive type.
-    type Agent: Copy;
 
     /// Returns a vector containing the legal actions that can be taken at the current state by the given agent.
     fn actions(&self, agent: Self::Agent) -> Vec<Self::Action>;
@@ -237,8 +232,8 @@ impl<'a, State: AdversarialSearchState> AdversarialSearchSuccessor<'a, State> {
     }
 
     /// Return the action leading to the successor state.
-    pub fn action(&self) -> &State::Action {
-        &self.action
+    pub fn action(&self) -> State::Action {
+        self.action
     }
 
     /// Return a reference to the child node.
@@ -261,11 +256,9 @@ pub trait AdversarialSearchNode<'a, State: AdversarialSearchState> {
 
     /// Returns a reference to a vector containing the node's successors (i.e. child nodes), if they exist.
     /// 
-    /// Returns `None` if the node has no successors, otherwise return a reference to them. Note that there is a subtle difference between a node that
-    /// _can't_ have successors and a node that _doesn't_ have successors. This method should return `None` only if it's unable to have successors (perhaps 
-    /// the only practical purpose of this is terminal nodes, but the subtle difference is important to keep in mind).
+    /// Returns `None` if the node has no successors, otherwise return a reference to them.
     /// 
-    /// Also note that a node's successors don't need to be of the same type; as long as they use the same state as this node, 
+    /// Note that a node's successors don't need to be of the same type; as long as they use the same state as this node, 
     /// they're valid successors. As a concrete example, this means that a minimizer node can have maximizer nodes as its 
     /// successors, as long as all nodes are generic to the same state.
     fn successors(&self) -> Option<&Vec<AdversarialSearchSuccessor<'a, State>>>;
@@ -277,8 +270,8 @@ pub trait AdversarialSearchNode<'a, State: AdversarialSearchState> {
     /// 
     /// How a node's utility is calculated is determined by the type of node in this method. For example, minimizer nodes 
     /// will minimize the utility of their successors; maximizer nodes do the opposite. Thus, this method is how to determine 
-    /// the method by which a node calculates its own usility, potentially relative to its successors's utility.
-    fn utility(&self) -> (State::Utility, Option<&State::Action>);
+    /// the method by which a node calculates its own usility, potentially relative to its successors' utility.
+    fn utility(&self) -> (State::Utility, Option<State::Action>);
 }
 
 
@@ -312,7 +305,7 @@ impl<'a, State: AdversarialSearchState> AdversarialSearchNode<'a, State> for Ter
     /// 
     /// Since this node is terminal, the returned utility is the utility of the node's state as determined by the state's evaluation function; the 
     /// returned action is always `None`.
-    fn utility(&self) -> (State::Utility, Option<&State::Action>) {
+    fn utility(&self) -> (State::Utility, Option<State::Action>) {
         (self.state.eval(), None)
     }
 }
@@ -329,7 +322,7 @@ pub struct MinimizerNode<'a, State: AdversarialSearchState> where State::Utility
 
 impl<'a, State: 'a + AdversarialSearchState> MinimizerNode<'a, State> where State::Utility: PartialOrd {
     /// Creates and returns a new minimizer node for the given state & successors.
-    fn new(state: State, successors: Vec<AdversarialSearchSuccessor<'a, State>>) -> Box<dyn AdversarialSearchNode<'a, State> + 'a> {
+    pub fn new(state: State, successors: Vec<AdversarialSearchSuccessor<'a, State>>) -> Box<dyn AdversarialSearchNode<'a, State> + 'a> {
         Box::new(MinimizerNode { state, successors })
     }
 }
@@ -350,7 +343,7 @@ impl<'a, State: AdversarialSearchState> AdversarialSearchNode<'a, State> for Min
     /// terminal.
     /// 
     /// Note that this method returns the _first_ action that achieves optimal utility, that is, in the event of a tie, the optimal action is not changed.
-    fn utility(&self) -> (State::Utility, Option<&State::Action>) {
+    fn utility(&self) -> (State::Utility, Option<State::Action>) {
         let successor = &self.successors[0];
 
         let (mut min_utility, _) = successor.node().utility();
@@ -382,7 +375,7 @@ pub struct MaximizerNode<'a, State: AdversarialSearchState> where State::Utility
 
 impl<'a, State: 'a + AdversarialSearchState> MaximizerNode<'a, State> where State::Utility: PartialOrd {
     /// Creates and returns a new maximizer node for the given state & successors.
-    fn new(state: State, successors: Vec<AdversarialSearchSuccessor<'a, State>>) -> Box<dyn AdversarialSearchNode<'a, State> + 'a> {
+    pub fn new(state: State, successors: Vec<AdversarialSearchSuccessor<'a, State>>) -> Box<dyn AdversarialSearchNode<'a, State> + 'a> {
         Box::new(MaximizerNode { state, successors })
     }
 }
@@ -403,7 +396,7 @@ impl<'a, State: AdversarialSearchState> AdversarialSearchNode<'a, State> for Max
     /// terminal.
     /// 
     /// Note that this method returns the _first_ action that achieves optimal utility, that is, in the event of a tie, the optimal action is not changed.
-    fn utility(&self) -> (State::Utility, Option<&State::Action>) {
+    fn utility(&self) -> (State::Utility, Option<State::Action>) {
         let successor = &self.successors[0];
 
         let (mut max_utility, _) = successor.node().utility();
@@ -428,7 +421,7 @@ impl<'a, State: AdversarialSearchState> AdversarialSearchNode<'a, State> for Max
 /// 
 /// This node determines its utility as the expected utility among its children. For simplicity, it currently assumes that its successors 
 /// are uniformly likely to be encountered (or, equivalently, that the "action to take" is selected uniformly at random). For this reason, 
-/// the `State` generic type must be numeric, i.e. it must be capable of performing basic numeric operations, formalized by `num_traits::Num`.
+/// the `State` generic type must be numeric, i.e. it must be capable of performing basic arithmetic operations, formalized by `num_traits::Num`.
 pub struct ChanceNode<'a, State: AdversarialSearchState> where State::Utility: Num {
     state: State,
     successors: Vec<AdversarialSearchSuccessor<'a, State>>,
@@ -452,9 +445,9 @@ impl<'a, State: AdversarialSearchState> AdversarialSearchNode<'a, State> for Cha
 
     /// Determines and returns the utility of the node. `None` is returned for the action because chance nodes predict only the expected utility, not an action to take.
     /// 
-    /// For chance nodes, utility is defined as the expected utility between the node's successors according to a uniform probability distribution. (also note that chance nodes are guaranteed to 
+    /// For chance nodes, utility is defined as the expected utility between the node's successors according to a uniform probability distribution. (Also note that chance nodes are guaranteed to 
     /// have successors because they aren't `TerminalNode`s).
-    fn utility(&self) -> (State::Utility, Option<&State::Action>) {
+    fn utility(&self) -> (State::Utility, Option<State::Action>) {
         let mut total_utility = State::Utility::zero();
         let mut n_successors = State::Utility::zero();
 
@@ -463,7 +456,7 @@ impl<'a, State: AdversarialSearchState> AdversarialSearchNode<'a, State> for Cha
 
             // Can't use += because of the lack of additional trait requirement
             total_utility = total_utility + utility;
-            n_successors = n_successors + State::Utility::one();
+            n_successors = n_successors + State::Utility::one(); // I feel like this is kinda jank, there has to be a better way
         }
 
         (total_utility / n_successors, None)
