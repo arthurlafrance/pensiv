@@ -131,7 +131,7 @@ impl<'a, State: 'a + AdversarialSearchState> AdversarialSearchAgent<'a, State> {
             let node_constructor = policy.node();
 
             for action in state.actions(agent).iter() {
-                let successor_state = state.successor(agent, action);
+                let successor_state = state.successor(agent, *action);
                 let child = self.make_node(successor_state, (policy_index + 1) % self.n_policies, depth + 1);
 
                 let successor = AdversarialSearchSuccessor::new(*action, child);
@@ -201,7 +201,7 @@ pub trait AdversarialSearchState {
     /// 
     /// Note that this function assumes that the action being taken is a valid action to take from the current state; any 
     /// violation of this precondition is undefined behavior, and can be handled at the developer's discretion.
-    fn successor(&self, agent: Self::Agent, action: &Self::Action) -> Self;
+    fn successor(&self, agent: Self::Agent, action: Self::Action) -> Self;
 
     /// Returns the utility of the current state according to the evaluation function.
     /// 
@@ -467,4 +467,120 @@ impl<'a, State: AdversarialSearchState> AdversarialSearchNode<'a, State> for Cha
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::HashSet;
+
+    // State repr for testing: linear PacMan
+    /*
+        |* P   G*|
+    */
+
+    // Rules of the game:
+        // Left border is @ pos = 0, right border is @ pos = 19
+        // Each timestep is -1 to score
+        // Each pellet gives +50
+        // Dying is automatic -100 score
+    #[derive(Debug, PartialEq, Clone)]
+    struct LinearPacManState {
+        pacman_pos: i32,
+        ghost_pos: i32,
+        pellets: HashSet<i32>,
+        score: i32,
+    }
+
+    impl LinearPacManState {
+        fn new() -> LinearPacManState {
+            let mut pellets = HashSet::with_capacity(3);
+            pellets.insert(1);
+            pellets.insert(11);
+            pellets.insert(16);
+
+            LinearPacManState { pacman_pos: 5, ghost_pos: 14, pellets, score: 0 }
+        }
+    }
+
+    impl AdversarialSearchState for LinearPacManState {
+        type Action = i8;
+        type Agent = char;
+        type Utility = i32;
+
+        fn actions(&self, agent: char) -> Vec<i8> {
+            let mut actions = Vec::with_capacity(2);
+
+            if agent == 'P' {
+                if self.pacman_pos > 0 {
+                    actions.push(-1);
+                }
+
+                if self.pacman_pos < 19 {
+                    actions.push(1);
+                }
+            }
+            else if agent == 'G' {
+                if self.ghost_pos > 0 {
+                    actions.push(-1);
+                }
+
+                if self.ghost_pos < 19 {
+                    actions.push(1);
+                }
+            }
+            
+            actions // What about invalid agents? Should this return Result or something?
+        }
+
+        fn successor(&self, agent: char, action: i8) -> LinearPacManState {
+            // Again, what about invalid agents?
+            let mut pacman_pos = self.pacman_pos;
+            let mut ghost_pos = self.ghost_pos;
+            let mut pellets = self.pellets.clone();
+            let mut score = self.score - 1;
+
+            if agent == 'P' {
+                pacman_pos += action as i32;
+
+                if pellets.remove(&pacman_pos) { // remove is basically "contains? then remove if true"
+                    score += 50;
+                }
+            }
+            else if agent == 'G' {
+                ghost_pos += action as i32;
+            }
+
+            if pacman_pos == ghost_pos {
+                score = -100;
+                pacman_pos = -1; // signifies that PacMan is dead
+            }
+
+            LinearPacManState { pacman_pos, ghost_pos, pellets, score }
+        }
+
+        fn eval(&self) -> i32 {
+            self.score
+        }
+
+        fn is_terminal(&self) -> bool {
+            self.pacman_pos < 0 // only way for the game to end is for PacMan to die
+        }
+    }
+
+
+    // AdversarialSearchAgent
+        // new
+        // minimax
+        // expectimax
+        // optimal_action
+    // TerminalNode
+        // new
+            // new node created correctly
+        // utility
+            // utility calculated correctly
+    // MinimizerNode
+        // new
+        // utility
+    // MaximizerNode
+        // new
+        // utility
+    // ChanceNode
+        // new
+        // utility
 }
