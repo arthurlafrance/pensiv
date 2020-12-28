@@ -569,11 +569,31 @@ mod tests {
         // minimax
         // expectimax
         // optimal_action
-    // TerminalNode
-        // new
-            // new node created correctly
-        // utility
-            // utility calculated correctly
+    
+    #[test]
+    fn terminal_node_created_correctly() {
+        let state = LinearPacManState::new();
+        let node = TerminalNode::new(state.clone());
+
+        assert_eq!(*(node.state()), state);
+        
+        match node.successors() {
+            Some(_) => panic!("terminal node has successors"),
+            None => {},
+        }
+    }
+
+    #[test]
+    fn terminal_node_utility_calculated_correctly() {
+        let state = LinearPacManState::new();
+        let node = TerminalNode::new(state.clone());
+
+        let (utility, action) = node.utility();
+
+        assert_eq!(utility, state.eval());
+        assert_eq!(action, None);
+    }
+        
     // MinimizerNode
         // new
         // utility
