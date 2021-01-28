@@ -4,6 +4,9 @@ version = "0.0.1"
 authors = ["Arthur Lafrance <lafrancearthur@gmail.com>"]
 edition = "2018"
 
+[lib]
+doctest = false
+
 [dependencies]
 ndarray = "0.13.1"
 num-traits = "0.2"

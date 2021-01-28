@@ -103,6 +103,27 @@ impl<'a, State: 'a + AdversarialSearchState> AdversarialSearchAgent<'a, State> {
         AdversarialSearchAgent { policies, n_policies, max_depth }
     }
 
+    /// Return a reference to the policies for the agent.
+    ///
+    /// The player's policy will be the first element, and the adversaries' policies will appear sequentially after it.
+    pub fn policies(&self) -> &Vec<AdversarialSearchPolicy<'a, State>> {
+        &self.policies
+    }
+
+    /// Returns the number of policies in the game tree.
+    ///
+    /// This is equivalent to `self.policies().len()`
+    pub fn n_policies(&self) -> usize {
+        self.n_policies
+    }
+
+    /// Returns the (optional) maximum depth of adversarial search.
+    ///
+    /// If `None` is returned, there is no maximum depth, and adversarial search will proceed through the entire game tree.
+    pub fn max_depth(&self) -> Option<usize> {
+        self.max_depth
+    }
+
     /// Return the optimal action for the agent to take from the given state, if it exists.
     ///
     /// This function performs adversarial search -- it constructs a game tree starting at the current state according to the agent's known
@@ -110,6 +131,10 @@ impl<'a, State: 'a + AdversarialSearchState> AdversarialSearchAgent<'a, State> {
     ///
     /// Note that this method assumes that `state` is a state from which the agent acts first; all adversaries will act in the order that their strategies
     /// were specified.
+    ///
+    /// One important note is that performing adversarial search with no maximum depth may lead to infinite recursion, if there exists
+    /// some way to transition between states in a cycle. (Think of this as a cyclic state space graph, which would obviously result in a never-ending tree).
+    /// Thus, be cognizant of this risk, and use infinite-depth adversarial search at your own risk.
     pub fn optimal_action(&self, state: State) -> Option<State::Action> {
         let root = self.make_node(state, 0, 0);
         let (_, action) = root.utility();
@@ -465,116 +490,133 @@ impl<'a, State: AdversarialSearchState> AdversarialSearchNode<'a, State> for Cha
     }
 }
 
-
+/*
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::collections::HashSet;
 
-    // State repr for testing: linear PacMan
-    /*
-        |* P   G*|
-        '|' = wall/border
-        '*' = pellet
-        'P' = PacMan
-        'G' = ghost
-    */
+    // new test "game":
+        // simple game with two agents on a board where each spot has a numeric value
+        // a collision between player & adversary ends the game
+        // the player can:
+            // move one spot right on the board
+            // "call it" at any time, ie end the game at the current state
+        // possible adversary movements:
+            // move one spot left deterministically
+            // move either left or right uniformly at random (how to make non-cyclic in this case?)
+        // at the end of the game, the player's score is the numeric value of the spot that they're on
+        // possible test cases by board config:
+            // player moves forward to best spot and ends game
+            // player moves forward to best spot that won't cause collision and ends game (even if that's not the global maximum value spot)
+            // player chooses not to move
+            // etc
 
-    // Rules of the game:
-        // Left border is @ pos = 0, right border is @ pos = 19
-        // Each timestep is -1 to score
-        // Each pellet gives +50
-        // Dying is automatic -100 score
-    #[derive(Debug, PartialEq, Clone)]
-    struct LinearPacManState {
-        pacman_pos: i32,
-        ghost_pos: i32,
-        pellets: HashSet<i32>,
-        score: f64,
+    // TODO: set up adversarial search
+
+    struct TestGameState {
+        player_pos: usize,
+        adversary_pos: usize,
+        board: &[u32],
+        game_over: bool,
     }
 
-    impl LinearPacManState {
-        fn new() -> LinearPacManState {
-            let mut pellets = HashSet::with_capacity(3);
-            pellets.insert(1);
-            pellets.insert(11);
-            pellets.insert(16);
-
-            LinearPacManState { pacman_pos: 5, ghost_pos: 14, pellets, score: 0.0 }
+    impl TestGameState {
+        fn new(board: &[u32]) -> TestGameState {
+            TestGameState { player_pos: 0, adversary_pos: board.len(), board, game_over: false }
         }
     }
 
-    impl AdversarialSearchState for LinearPacManState {
-        type Action = i8;
-        type Agent = char;
-        type Utility = f64;
+    type NodeConstructor<'a, State> = fn(State, Vec<AdversarialSearchSuccessor<'a, State>>) -> Box<dyn AdversarialSearchNode<'a, State>>;
 
-        fn actions(&self, agent: char) -> Vec<i8> {
-            let mut actions = Vec::with_capacity(2);
+    #[test]
+    fn minimax_agent_created_correctly_no_max_depth() {
+        let agent = AdversarialSearchAgent::<LinearPacManState>::minimax(vec!['P', 'G'], None);
 
-            if agent == 'P' {
-                if self.pacman_pos > 0 {
-                    actions.push(-1);
-                }
+        assert_eq!(agent.n_policies(), 2);
+        assert_eq!(agent.max_depth(), None);
 
-                if self.pacman_pos < 19 {
-                    actions.push(1);
-                }
-            }
-            else if agent == 'G' {
-                if self.ghost_pos > 0 {
-                    actions.push(-1);
-                }
+        let expected_policies: Vec<NodeConstructor<LinearPacManState>> = vec![MaximizerNode::new, MinimizerNode::new];
 
-                if self.ghost_pos < 19 {
-                    actions.push(1);
-                }
-            }
-
-            actions // What about invalid agents? Should this return Result or something?
-        }
-
-        fn successor(&self, agent: char, action: i8) -> LinearPacManState {
-            // Again, what about invalid agents?
-            let mut pacman_pos = self.pacman_pos;
-            let mut ghost_pos = self.ghost_pos;
-            let mut pellets = self.pellets.clone();
-            let mut score = self.score - 1.0;
-
-            if agent == 'P' {
-                pacman_pos += action as i32;
-
-                if pellets.remove(&pacman_pos) { // remove is basically "contains? then remove if true"
-                    score += 50.0;
-                }
-            }
-            else if agent == 'G' {
-                ghost_pos += action as i32;
-            }
-
-            if pacman_pos == ghost_pos {
-                score = -100.0;
-                pacman_pos = -1; // signifies that PacMan is dead
-            }
-
-            LinearPacManState { pacman_pos, ghost_pos, pellets, score }
-        }
-
-        fn eval(&self) -> f64 {
-            self.score
-        }
-
-        fn is_terminal(&self) -> bool {
-            self.pacman_pos < 0 // only way for the game to end is for PacMan to die
+        for (i, policy) in agent.policies().iter().enumerate() {
+            let expected_policy = &expected_policies[i];
+            assert!(policy.node() == *expected_policy);
         }
     }
 
+    #[test]
+    fn minimax_agent_created_correctly_with_max_depth() {
+        let agent = AdversarialSearchAgent::<LinearPacManState>::minimax(vec!['P', 'G'], Some(5));
 
-    // AdversarialSearchAgent
-        // new
-        // minimax
-        // expectimax
-        // optimal_action
+        assert_eq!(agent.n_policies(), 2);
+        assert_eq!(agent.max_depth(), Some(5));
+
+        let expected_policies: Vec<NodeConstructor<LinearPacManState>> = vec![MaximizerNode::new, MinimizerNode::new];
+
+        for (i, policy) in agent.policies().iter().enumerate() {
+            let expected_policy = &expected_policies[i];
+            assert!(policy.node() == *expected_policy);
+        }
+    }
+
+    #[test]
+    fn minimax_agent_adv_search_returns_correct_result_no_max_depth() {
+
+    }
+
+    #[test]
+    fn minimax_agent_adv_search_returns_correct_result_with_max_depth() {
+        // TODO
+    }
+
+    #[test]
+    fn expectimax_agent_created_correctly_no_max_depth() {
+        let agent = AdversarialSearchAgent::<LinearPacManState>::expectimax(vec!['P', 'G'], None);
+
+        assert_eq!(agent.n_policies(), 2);
+        assert_eq!(agent.max_depth(), None);
+
+        let expected_policies: Vec<NodeConstructor<LinearPacManState>> = vec![MaximizerNode::new, ChanceNode::new];
+
+        for (i, policy) in agent.policies().iter().enumerate() {
+            let expected_policy = &expected_policies[i];
+            assert!(policy.node() == *expected_policy);
+        }
+    }
+
+    #[test]
+    fn expectimax_agent_created_correctly_with_max_depth() {
+        let agent = AdversarialSearchAgent::<LinearPacManState>::expectimax(vec!['P', 'G'], Some(5));
+
+        assert_eq!(agent.n_policies(), 2);
+        assert_eq!(agent.max_depth(), Some(5));
+
+        let expected_policies: Vec<NodeConstructor<LinearPacManState>> = vec![MaximizerNode::new, ChanceNode::new];
+
+        for (i, policy) in agent.policies().iter().enumerate() {
+            let expected_policy = &expected_policies[i];
+            assert!(policy.node() == *expected_policy);
+        }
+    }
+
+    #[test]
+    fn expectimax_agent_adv_search_returns_correct_result_no_max_depth() {
+        // TODO
+    }
+
+    #[test]
+    fn expectimax_agent_adv_search_returns_correct_result_with_max_depth() {
+        // TODO
+    }
+
+    #[test]
+    fn custom_policy_agent_adv_search_returns_correct_result_no_max_depth() {
+        // TODO
+    }
+
+    #[test]
+    fn custom_policy_agent_adv_search_returns_correct_result_with_max_depth() {
+        // TODO
+    }
 
     #[test]
     fn terminal_node_created_correctly() {
@@ -832,3 +874,4 @@ mod tests {
         assert_eq!(action, None);
     }
 }
+*/
