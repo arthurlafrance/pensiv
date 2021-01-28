@@ -18,7 +18,7 @@ Note that `pensiv` is currently not published to `crates.io`, so the above state
 ## Contributing
 Evidently, `pensiv` is constantly growing and evolving, so if you have suggestions for features to add or find issues with the code, feel free to create an issue for it and I'll see what I can do.
 
-Do note, though, that any feature requests for types of machine learning techniques will most likely be redundant because there's a high chance I'm already planning on implementing it; see the roadmap below for more information.
+Do note, though, that any feature requests for types of machine learning techniques will most likely be redundant because there's a high chance I'm already planning on implementing it; see the [roadmap](ROADMAP.md) for more information.
 
 ## Still to Come
 As mentioned above, `pensiv` is and will continue to be constantly growing. See the [roadmap](ROADMAP.md) for details about what's coming to Pensiv in the future; the short version is that I'm planning to add basic classification, regression, and clustering techniques in the immediate future, with more to come after that.
