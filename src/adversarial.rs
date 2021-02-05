@@ -490,7 +490,7 @@ impl<'a, State: AdversarialSearchState> AdversarialSearchNode<'a, State> for Cha
     }
 }
 
-/*
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -516,18 +516,130 @@ mod tests {
     struct TestGameState {
         player_pos: usize,
         adversary_pos: usize,
+
+        player_score: u32,
+        adversary_score: u32,
+
+        max_pos: usize,
         board: &[u32],
-        game_over: bool,
     }
 
     impl TestGameState {
         fn new(board: &[u32]) -> TestGameState {
-            TestGameState { player_pos: 0, adversary_pos: board.len(), board, game_over: false }
+            let max_pos = board.len() - 1;
+
+            TestGameState {
+                player_pos: 0, adversary_pos: max_pos,
+                player_score: 0, adversary_score: 0,
+                max_pos, board
+            }
+        }
+    }
+
+    #[derive(Copy)]
+    enum TestGameAgent {
+        Player = 'P',
+        Adversary = 'A',
+    }
+
+    #[derive(Copy)]
+    enum TestGameAction {
+        Left(i8),
+        Right(i8),
+    }
+
+    impl AdversarialSearchState for TestGameState {
+        type Action = TestGameAction;
+        type Agent = TestGameAgent;
+        type Utility = i32;
+
+        fn actions(&self, agent: TestGameAgent) -> Vec<TestGameAction> {
+            let mut actions = Vec::with_capacity(2);
+
+            let pos = match agent {
+                TestGameAgent::Player => self.player_pos,
+                TestGameAgent::Adversary => self.adversary_pos,
+            };
+
+            let mut left_neighbor = pos - 1;
+
+            while left_neighbor > 0 && self.board[left_neighbor] <= 0 {
+                left_neighbor -= 1;
+            }
+
+            if left_neighbor >= 0 {
+                let action = TestGameAction::Left(pos - left_neighbor);
+                actions.push(action);
+            }
+
+            let mut right_neighbor = pos + 1;
+
+            while right_neighbor < self.max_pos && self.board[right_neighbor] <= 0 {
+                right_neighbor += 1;
+            }
+
+            if right_neighbor <= self.max_pos - 1 {
+                let action = TestGameAction::Right(right_neighbor - pos);
+                actions.push(action);
+            }
+
+            actions
+        }
+
+        fn successor(&self, agent: TestGameAgent, action: TestGameAction) -> TestGameState {
+            let player_pos = self.player_pos;
+            let adversary_pos = self.adversary_pos;
+            let player_score = self.player_score;
+            let adversary_score = self.adversary_score;
+
+            let mut pos;
+            let mut score;
+            let mut board = self.board.clone();
+
+            match agent {
+                TestGameAgent::Player => {
+                    pos = &player_pos;
+                    score = &player_score;
+                },
+                TestGameAgent::Adversary => {
+                    pos = &adversary_pos;
+                    score = &adversary_score;
+                },
+            };
+
+            let dx = match action {
+                TestGameAction::Left(x) => {
+                    -x
+                },
+                TestGameAction::Right(x) => {
+                    x
+                },
+            };
+
+            // add to score, mark as visited
+            *score += board[*pos];
+            board[*pos] = 0;
+
+            // add to pos
+            *pos += dx;
+
+            TestGameState { player_pos, adversary_pos, player_score, adversary_score, max_pos: self.max_pos, board }
+        }
+
+        fn eval(&self) -> i32 {
+            self.player_score as i32 - self.adversary_score as i32
+        }
+
+        fn is_terminal(&self) -> bool {
+            self.player_pos == self.adversary_pos ||
+            (self.actions(TestGameAgent::Player).len() == 0 && self.actions(TestGameAgent::Adversary).len() == 0)
         }
     }
 
     type NodeConstructor<'a, State> = fn(State, Vec<AdversarialSearchSuccessor<'a, State>>) -> Box<dyn AdversarialSearchNode<'a, State>>;
 
+    // TODO: TestGameState tests
+    
     #[test]
     fn minimax_agent_created_correctly_no_max_depth() {
         let agent = AdversarialSearchAgent::<LinearPacManState>::minimax(vec!['P', 'G'], None);
@@ -874,4 +986,3 @@ mod tests {
         assert_eq!(action, None);
     }
 }
-*/
