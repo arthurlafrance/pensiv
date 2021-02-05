@@ -5,7 +5,7 @@ Rust-based AI & machine learning
 `pensiv` is a Rust crate that aims to provide implementations of various artificial intelligence & machine learning techniques. To date, `pensiv` contains implementations of basic probability & statistics as well as adversarial search; see the roadmap below for what will be added in the near future. My ultimate goal is to develop the crate into a comprehensive library of foundational techniques in artificial intelligence & machine learning providing a complete set of optimized implementations of such techniques.
 
 ## Installation & Use
-In order to use `pensiv` as a Cargo dependency, include it in your `Cargo.toml` manifest file in the `[dependencies]` section:
+In order to use Pensiv as a Cargo dependency, include it in your `Cargo.toml` manifest file in the `[dependencies]` section:
 ```toml
 # ...
 
