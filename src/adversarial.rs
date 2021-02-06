@@ -495,6 +495,9 @@ impl<'a, State: AdversarialSearchState> AdversarialSearchNode<'a, State> for Cha
 mod tests {
     use super::*;
 
+    use std::fmt::{Display, Formatter, Result as FmtResult};
+    use std::str::FromStr;
+
     // new test "game":
         // simple game with two agents on a board where each spot has a numeric value
         // a collision between player & adversary ends the game
@@ -521,31 +524,70 @@ mod tests {
         adversary_score: u32,
 
         max_pos: usize,
-        board: &[u32],
+        board: Vec<u32>,
     }
 
     impl TestGameState {
-        fn new(board: &[u32]) -> TestGameState {
+        fn start(board: Vec<u32>) -> TestGameState {
             let max_pos = board.len() - 1;
 
             TestGameState {
-                player_pos: 0, adversary_pos: max_pos,
+                player_pos: max_pos / 4usize, adversary_pos: max_pos * 3usize / 4usize,
                 player_score: 0, adversary_score: 0,
                 max_pos, board
             }
         }
+
+        fn new(player_pos: usize, adversary_pos: usize, player_score: u32, adversary_score: u32, board: Vec<u32>) -> TestGameState {
+            let max_pos = board.len() - 1;
+
+            TestGameState {
+                player_pos, adversary_pos,
+                player_score, adversary_score,
+                max_pos, board
+            }
+        }
+
+        fn player_pos(&self) -> usize {
+            self.player_pos
+        }
+
+        fn adversary_pos(&self) -> usize {
+            self.adversary_pos
+        }
+
+        fn player_score(&self) -> u32 {
+            self.player_score
+        }
+
+        fn adversary_score(&self) -> u32 {
+            self.adversary_score
+        }
+
+        fn board(&self) -> &[u32] {
+            &self.board
+        }
+
+        fn player_spot(&self) -> u32 {
+            self.board[self.player_pos]
+        }
+
+        fn adversary_spot(&self) -> u32 {
+            self.board[self.adversary_pos]
+        }
     }
 
-    #[derive(Copy)]
+    #[derive(Debug, PartialEq, Clone, Copy)]
     enum TestGameAgent {
-        Player = 'P',
-        Adversary = 'A',
+        Player,
+        Adversary,
     }
 
-    #[derive(Copy)]
+    #[derive(Debug, PartialEq, Clone, Copy)]
     enum TestGameAction {
-        Left(i8),
-        Right(i8),
+        Left(usize),
+        Right(usize),
+        Peek, // only valid when you have no other moves
     }
 
     impl AdversarialSearchState for TestGameState {
@@ -554,74 +596,95 @@ mod tests {
         type Utility = i32;
 
         fn actions(&self, agent: TestGameAgent) -> Vec<TestGameAction> {
-            let mut actions = Vec::with_capacity(2);
+            if self.is_terminal() {
+                return vec![];
+            }
+
+            let mut actions = Vec::with_capacity(3);
 
             let pos = match agent {
                 TestGameAgent::Player => self.player_pos,
                 TestGameAgent::Adversary => self.adversary_pos,
             };
 
-            let mut left_neighbor = pos - 1;
+            if pos > 0 {
+                let mut left_neighbor = pos - 1;
 
-            while left_neighbor > 0 && self.board[left_neighbor] <= 0 {
-                left_neighbor -= 1;
+                while self.board[left_neighbor] <= 0 {
+                    if left_neighbor > 0 {
+                        left_neighbor -= 1;
+                    }
+                    else {
+                        break;
+                    }
+                }
+
+                if self.board[left_neighbor] > 0 {
+                    let action = TestGameAction::Left(pos - left_neighbor);
+
+                    actions.push(action);
+                }
             }
 
-            if left_neighbor >= 0 {
-                let action = TestGameAction::Left(pos - left_neighbor);
-                actions.push(action);
+            if pos < self.max_pos {
+                let mut right_neighbor = pos + 1;
+
+                while right_neighbor <= self.max_pos && self.board[right_neighbor] <= 0 {
+                    right_neighbor += 1;
+                }
+
+                if right_neighbor <= self.max_pos {
+                    let action = TestGameAction::Right(right_neighbor - pos);
+                    actions.push(action);
+                }
             }
 
-            let mut right_neighbor = pos + 1;
-
-            while right_neighbor < self.max_pos && self.board[right_neighbor] <= 0 {
-                right_neighbor += 1;
-            }
-
-            if right_neighbor <= self.max_pos - 1 {
-                let action = TestGameAction::Right(right_neighbor - pos);
-                actions.push(action);
+            if actions.len() == 0 {
+                actions.push(TestGameAction::Peek);
             }
 
             actions
         }
 
         fn successor(&self, agent: TestGameAgent, action: TestGameAction) -> TestGameState {
-            let player_pos = self.player_pos;
-            let adversary_pos = self.adversary_pos;
-            let player_score = self.player_score;
-            let adversary_score = self.adversary_score;
+            let mut player_pos = self.player_pos;
+            let mut adversary_pos = self.adversary_pos;
+            let mut player_score = self.player_score;
+            let mut adversary_score = self.adversary_score;
 
-            let mut pos;
-            let mut score;
+            let pos;
+            let score;
             let mut board = self.board.clone();
 
             match agent {
                 TestGameAgent::Player => {
-                    pos = &player_pos;
-                    score = &player_score;
+                    pos = &mut player_pos;
+                    score = &mut player_score;
                 },
                 TestGameAgent::Adversary => {
-                    pos = &adversary_pos;
-                    score = &adversary_score;
+                    pos = &mut adversary_pos;
+                    score = &mut adversary_score;
                 },
             };
 
-            let dx = match action {
-                TestGameAction::Left(x) => {
-                    -x
-                },
-                TestGameAction::Right(x) => {
-                    x
-                },
-            };
-
-            // add to score, mark as visited
             *score += board[*pos];
             board[*pos] = 0;
 
-            // add to pos
-            *pos += dx;
+            match action {
+                TestGameAction::Left(dx) => {
+                    *pos -= dx;
+                },
+                TestGameAction::Right(dx) => {
+                    *pos += dx;
+                },
+                TestGameAction::Peek => {},
+            };
+
+            if player_pos == adversary_pos {
+                // if they collide, adversary "eats" player
+                adversary_score += player_score;
+                player_score = 0;
+            }
 
             TestGameState { player_pos, adversary_pos, player_score, adversary_score, max_pos: self.max_pos, board }
         }
@@ -631,15 +694,312 @@ mod tests {
         }
 
         fn is_terminal(&self) -> bool {
-            self.player_pos == self.adversary_pos ||
-            (self.actions(TestGameAgent::Player).len() == 0 && self.actions(TestGameAgent::Adversary).len() == 0)
+            self.player_pos == self.adversary_pos || self.board.iter().all(|&spot| spot <= 0)
+        }
+    }
+
+    impl Display for TestGameState {
+        fn fmt(&self, f: &mut Formatter) -> FmtResult {
+            let mut board_str = String::from_str("[ ").unwrap();
+
+            for (i, v) in self.board.iter().enumerate() {
+                board_str.push_str(format!("{}", v).as_str());
+
+                if i == self.player_pos {
+                    board_str.push_str("(P)");
+                }
+                else if i == self.adversary_pos {
+                    board_str.push_str("(A)");
+                }
+
+                board_str.push_str(" ");
+            }
+
+            board_str.push_str("]");
+            write!(f, "{}", board_str)
         }
     }
 
     type NodeConstructor<'a, State> = fn(State, Vec<AdversarialSearchSuccessor<'a, State>>) -> Box<dyn AdversarialSearchNode<'a, State>>;
 
-    // TODO: TestGameState tests
-    
+    #[test]
+    fn teststate_player_both_actions_returned_when_valid() {
+        let board: Vec<u32> = vec![4, 2, 5, 1, 2, 3];
+        let state = TestGameState::start(board);
+
+        assert_eq!(state.actions(TestGameAgent::Player), vec![TestGameAction::Left(1), TestGameAction::Right(1)]);
+    }
+
+    #[test]
+    fn teststate_adversary_both_actions_returned_when_valid() {
+        let board: Vec<u32> = vec![4, 2, 5, 1, 2, 3];
+        let state = TestGameState::start(board);
+
+        assert_eq!(state.actions(TestGameAgent::Adversary), vec![TestGameAction::Left(1), TestGameAction::Right(1)]);
+    }
+
+    #[test]
+    fn teststate_player_only_left_returned_when_valid() {
+        let board: Vec<u32> = vec![4, 2, 5, 1, 2, 3];
+        let max_pos = board.len() - 1;
+        let state = TestGameState::new(max_pos, 0, 0, 0, board);
+
+        assert_eq!(state.actions(TestGameAgent::Player), vec![TestGameAction::Left(1)]);
+    }
+
+    #[test]
+    fn teststate_adversary_only_left_returned_when_valid() {
+        let board: Vec<u32> = vec![4, 2, 5, 1, 2, 3];
+        let max_pos = board.len() - 1;
+        let state = TestGameState::new(0, max_pos, 0, 0, board);
+
+        assert_eq!(state.actions(TestGameAgent::Adversary), vec![TestGameAction::Left(1)]);
+    }
+
+    #[test]
+    fn teststate_player_only_right_returned_when_valid() {
+        let board: Vec<u32> = vec![4, 2, 5, 1, 2, 3];
+        let max_pos = board.len() - 1;
+        let state = TestGameState::new(0, max_pos, 0, 0, board);
+
+        assert_eq!(state.actions(TestGameAgent::Player), vec![TestGameAction::Right(1)]);
+    }
+
+    #[test]
+    fn teststate_adversary_only_right_returned_when_valid() {
+        let board: Vec<u32> = vec![4, 2, 5, 1, 2, 3];
+        let max_pos = board.len() - 1;
+        let state = TestGameState::new(max_pos, 0, 0, 0, board);
+
+        assert_eq!(state.actions(TestGameAgent::Adversary), vec![TestGameAction::Right(1)]);
+    }
+
+    #[test]
+    fn teststate_player_only_peek_returned_when_valid() {
+        let board: Vec<u32> = vec![4, 0, 0, 0, 0, 0];
+        let max_pos = board.len() - 1;
+        let state = TestGameState::new(0, max_pos, 0, 0, board);
+
+        assert_eq!(state.actions(TestGameAgent::Player), vec![TestGameAction::Peek]);
+    }
+
+    #[test]
+    fn teststate_adversary_only_peek_returned_when_valid() {
+        let board: Vec<u32> = vec![0, 0, 0, 0, 0, 3];
+        let max_pos = board.len() - 1;
+        let state = TestGameState::new(0, max_pos, 0, 0, board);
+
+        assert_eq!(state.actions(TestGameAgent::Adversary), vec![TestGameAction::Peek]);
+    }
+
+    #[test]
+    fn teststate_player_no_actions_returned_when_none_valid() {
+        let board: Vec<u32> = vec![0, 0, 0, 0, 0, 0];
+        let max_pos = board.len() - 1;
+        let state = TestGameState::new(0, max_pos, 0, 0, board);
+
+        assert_eq!(state.actions(TestGameAgent::Player).len(), 0);
+    }
+
+    #[test]
+    fn teststate_adversary_no_actions_returned_when_none_valid() {
+        let board: Vec<u32> = vec![0, 0, 0, 0, 0, 0];
+        let max_pos = board.len() - 1;
+        let state = TestGameState::new(0, max_pos, 0, 0, board);
+
+        assert_eq!(state.actions(TestGameAgent::Adversary).len(), 0);
+    }
+
+    #[test]
+    fn teststate_player_left_successor_returned_correctly() {
+        let board: Vec<u32> = vec![4, 2, 5, 1, 2, 3];
+        let state = TestGameState::start(board);
+        let successor = state.successor(TestGameAgent::Player, TestGameAction::Left(1));
+
+        // player moved 1 spot left
+        assert_eq!(successor.player_pos(), state.player_pos() - 1);
+
+        // adversary stayed the same
+        assert_eq!(successor.adversary_pos(), state.adversary_pos());
+
+        // player score went up
+        assert_eq!(successor.player_score(), state.player_score() + state.player_spot());
+
+        // adversary score stayed same
+        assert_eq!(successor.adversary_score(), state.adversary_score());
+
+        // spot was overwritten
+        assert_eq!(successor.board()[state.player_pos()], 0);
+    }
+
+    #[test]
+    fn teststate_player_right_successor_returned_correctly() {
+        let board: Vec<u32> = vec![4, 2, 5, 1, 2, 3];
+        let state = TestGameState::start(board);
+        let successor = state.successor(TestGameAgent::Player, TestGameAction::Right(1));
+
+        // player moved 1 spot left
+        assert_eq!(successor.player_pos(), state.player_pos() + 1);
+
+        // adversary stayed the same
+        assert_eq!(successor.adversary_pos(), state.adversary_pos());
+
+        // player score went up
+        assert_eq!(successor.player_score(), state.player_score() + state.player_spot());
+
+        // adversary score stayed same
+        assert_eq!(successor.adversary_score(), state.adversary_score());
+
+        // spot was overwritten
+        assert_eq!(successor.board()[state.player_pos()], 0);
+    }
+
+    #[test]
+    fn teststate_player_peek_successor_returned_correctly() {
+        let board: Vec<u32> = vec![4, 0, 0, 0, 0, 0];
+        let max_pos = board.len() - 1;
+        let state = TestGameState::new(0, max_pos, 0, 0, board);
+        let successor = state.successor(TestGameAgent::Player, TestGameAction::Peek);
+
+        // player moved 1 spot left
+        assert_eq!(successor.player_pos(), state.player_pos());
+
+        // adversary stayed the same
+        assert_eq!(successor.adversary_pos(), state.adversary_pos());
+
+        // player score went up
+        assert_eq!(successor.player_score(), state.player_score() + state.player_spot());
+
+        // adversary score stayed same
+        assert_eq!(successor.adversary_score(), state.adversary_score());
+
+        // spot was overwritten
+        assert_eq!(successor.player_spot(), 0);
+    }
+
+    #[test]
+    fn teststate_adversary_left_successor_returned_correctly() {
+        let board: Vec<u32> = vec![4, 2, 5, 1, 2, 3];
+        let state = TestGameState::start(board);
+        let successor = state.successor(TestGameAgent::Adversary, TestGameAction::Left(1));
+
+        // player moved 1 spot left
+        assert_eq!(successor.adversary_pos(), state.adversary_pos() - 1);
+
+        // adversary stayed the same
+        assert_eq!(successor.player_pos(), state.player_pos());
+
+        // player score went up
+        assert_eq!(successor.adversary_score(), state.adversary_score() + state.adversary_spot());
+
+        // adversary score stayed same
+        assert_eq!(successor.player_score(), state.player_score());
+
+        // spot was overwritten
+        assert_eq!(successor.board()[state.adversary_pos()], 0);
+    }
+
+    #[test]
+    fn teststate_adversary_right_successor_returned_correctly() {
+        let board: Vec<u32> = vec![4, 2, 5, 1, 2, 3];
+        let state = TestGameState::start(board);
+        let successor = state.successor(TestGameAgent::Adversary, TestGameAction::Right(1));
+
+        // player didn't move
+        assert_eq!(successor.adversary_pos(), state.adversary_pos() + 1);
+
+        // adversary stayed the same
+        assert_eq!(successor.player_pos(), state.player_pos());
+
+        // player score went up
+        assert_eq!(successor.adversary_score(), state.adversary_score() + state.adversary_spot());
+
+        // adversary score stayed same
+        assert_eq!(successor.player_score(), state.player_score());
+
+        // spot was overwritten
+        assert_eq!(successor.board()[state.adversary_pos()], 0);
+    }
+
+    #[test]
+    fn teststate_adversary_peek_successor_returned_correctly() {
+        let board: Vec<u32> = vec![4, 0, 0, 0, 0, 0];
+        let max_pos = board.len() - 1;
+        let state = TestGameState::new(max_pos, 0, 0, 0, board);
+        let successor = state.successor(TestGameAgent::Adversary, TestGameAction::Peek);
+
+        // player didn't move
+        assert_eq!(successor.player_pos(), state.player_pos());
+
+        // adversary stayed the same
+        assert_eq!(successor.adversary_pos(), state.adversary_pos());
+
+        // player score stayed the same
+        assert_eq!(successor.adversary_score(), state.adversary_score() + state.adversary_spot());
+
+        // adversary score went up
+        assert_eq!(successor.player_score(), state.player_score());
+
+        // spot was overwritten
+        assert_eq!(successor.adversary_spot(), 0);
+    }
+
+    #[test]
+    fn teststate_eval_function_calculated_correctly_positive() {
+        let board: Vec<u32> = vec![4, 2, 5, 1, 2, 3];
+        let player_score = 15i32;
+        let adversary_score = 9i32;
+        let state = TestGameState::new(0, 0, player_score as u32, adversary_score as u32, board);
+
+        assert_eq!(state.eval(), player_score - adversary_score);
+    }
+
+    #[test]
+    fn teststate_eval_function_calculated_correctly_zero() {
+        let board: Vec<u32> = vec![4, 2, 5, 1, 2, 3];
+        let player_score = 9i32;
+        let adversary_score = 9i32;
+        let state = TestGameState::new(0, 0, player_score as u32, adversary_score as u32, board);
+
+        assert_eq!(state.eval(), player_score - adversary_score);
+    }
+
+    #[test]
+    fn teststate_eval_function_calculated_correctly_negative() {
+        let board: Vec<u32> = vec![4, 2, 5, 1, 2, 3];
+        let player_score = 9i32;
+        let adversary_score = 15i32;
+        let state = TestGameState::new(0, 0, player_score as u32, adversary_score as u32, board);
+
+        assert_eq!(state.eval(), player_score - adversary_score);
+    }
+
+    #[test]
+    fn teststate_correctly_nonterminal_when_game_continues() {
+        let board: Vec<u32> = vec![4, 2, 5, 1, 2, 3];
+        let state = TestGameState::start(board);
+
+        assert!(!state.is_terminal());
+    }
+
+    #[test]
+    fn teststate_correctly_terminal_for_collision() {
+        let board: Vec<u32> = vec![4, 2, 5, 1, 2, 3];
+        let pos = 2;
+        let state = TestGameState::new(pos, pos, 0, 0, board);
+
+        assert!(state.is_terminal());
+    }
+
+    #[test]
+    fn teststate_correctly_terminal_when_no_moves() {
+        let board: Vec<u32> = vec![0, 0, 0, 0, 0, 0];
+        let max_pos = board.len() - 1;
+        let state = TestGameState::new(0, max_pos, 0, 0, board);
+
+        assert!(state.is_terminal());
+    }
+/*
     #[test]
     fn minimax_agent_created_correctly_no_max_depth() {
         let agent = AdversarialSearchAgent::<LinearPacManState>::minimax(vec!['P', 'G'], None);
@@ -984,5 +1344,5 @@ mod tests {
 
         assert_eq!(utility, exp_utility);
         assert_eq!(action, None);
-    }
+    }*/
 }
