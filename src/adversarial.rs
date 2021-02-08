@@ -593,7 +593,7 @@ mod tests {
     impl AdversarialSearchState for TestGameState {
         type Action = TestGameAction;
         type Agent = TestGameAgent;
-        type Utility = i32;
+        type Utility = f64;
 
         fn actions(&self, agent: TestGameAgent) -> Vec<TestGameAction> {
             if self.is_terminal() {
@@ -689,8 +689,8 @@ mod tests {
             TestGameState { player_pos, adversary_pos, player_score, adversary_score, max_pos: self.max_pos, board }
         }
 
-        fn eval(&self) -> i32 {
-            self.player_score as i32 - self.adversary_score as i32
+        fn eval(&self) -> f64 {
+            self.player_score as f64 - self.adversary_score as f64
         }
 
         fn is_terminal(&self) -> bool {
@@ -947,8 +947,8 @@ mod tests {
     #[test]
     fn teststate_eval_function_calculated_correctly_positive() {
         let board: Vec<u32> = vec![4, 2, 5, 1, 2, 3];
-        let player_score = 15i32;
-        let adversary_score = 9i32;
+        let player_score = 9.0;
+        let adversary_score = 15.0;
         let state = TestGameState::new(0, 0, player_score as u32, adversary_score as u32, board);
 
         assert_eq!(state.eval(), player_score - adversary_score);
@@ -957,8 +957,8 @@ mod tests {
     #[test]
     fn teststate_eval_function_calculated_correctly_zero() {
         let board: Vec<u32> = vec![4, 2, 5, 1, 2, 3];
-        let player_score = 9i32;
-        let adversary_score = 9i32;
+        let player_score = 9.0;
+        let adversary_score = 15.0;
         let state = TestGameState::new(0, 0, player_score as u32, adversary_score as u32, board);
 
         assert_eq!(state.eval(), player_score - adversary_score);
@@ -967,8 +967,8 @@ mod tests {
     #[test]
     fn teststate_eval_function_calculated_correctly_negative() {
         let board: Vec<u32> = vec![4, 2, 5, 1, 2, 3];
-        let player_score = 9i32;
-        let adversary_score = 15i32;
+        let player_score = 9.0;
+        let adversary_score = 15.0;
         let state = TestGameState::new(0, 0, player_score as u32, adversary_score as u32, board);
 
         assert_eq!(state.eval(), player_score - adversary_score);
@@ -999,15 +999,18 @@ mod tests {
 
         assert!(state.is_terminal());
     }
-/*
+
     #[test]
     fn minimax_agent_created_correctly_no_max_depth() {
-        let agent = AdversarialSearchAgent::<LinearPacManState>::minimax(vec!['P', 'G'], None);
+        let agent = AdversarialSearchAgent::<TestGameState>::minimax(
+            vec![TestGameAgent::Player, TestGameAgent::Adversary],
+            None
+        );
 
         assert_eq!(agent.n_policies(), 2);
         assert_eq!(agent.max_depth(), None);
 
-        let expected_policies: Vec<NodeConstructor<LinearPacManState>> = vec![MaximizerNode::new, MinimizerNode::new];
+        let expected_policies: Vec<NodeConstructor<TestGameState>> = vec![MaximizerNode::new, MinimizerNode::new];
 
         for (i, policy) in agent.policies().iter().enumerate() {
             let expected_policy = &expected_policies[i];
@@ -1017,12 +1020,16 @@ mod tests {
 
     #[test]
     fn minimax_agent_created_correctly_with_max_depth() {
-        let agent = AdversarialSearchAgent::<LinearPacManState>::minimax(vec!['P', 'G'], Some(5));
+        let max_depth = 5;
+        let agent = AdversarialSearchAgent::<TestGameState>::minimax(
+            vec![TestGameAgent::Player, TestGameAgent::Adversary],
+            Some(max_depth)
+        );
 
         assert_eq!(agent.n_policies(), 2);
-        assert_eq!(agent.max_depth(), Some(5));
+        assert_eq!(agent.max_depth(), Some(max_depth));
 
-        let expected_policies: Vec<NodeConstructor<LinearPacManState>> = vec![MaximizerNode::new, MinimizerNode::new];
+        let expected_policies: Vec<NodeConstructor<TestGameState>> = vec![MaximizerNode::new, MinimizerNode::new];
 
         for (i, policy) in agent.policies().iter().enumerate() {
             let expected_policy = &expected_policies[i];
@@ -1031,23 +1038,16 @@ mod tests {
     }
 
     #[test]
-    fn minimax_agent_adv_search_returns_correct_result_no_max_depth() {
-
-    }
-
-    #[test]
-    fn minimax_agent_adv_search_returns_correct_result_with_max_depth() {
-        // TODO
-    }
-
-    #[test]
     fn expectimax_agent_created_correctly_no_max_depth() {
-        let agent = AdversarialSearchAgent::<LinearPacManState>::expectimax(vec!['P', 'G'], None);
+        let agent = AdversarialSearchAgent::<TestGameState>::expectimax(
+            vec![TestGameAgent::Player, TestGameAgent::Adversary],
+            None
+        );
 
         assert_eq!(agent.n_policies(), 2);
         assert_eq!(agent.max_depth(), None);
 
-        let expected_policies: Vec<NodeConstructor<LinearPacManState>> = vec![MaximizerNode::new, ChanceNode::new];
+        let expected_policies: Vec<NodeConstructor<TestGameState>> = vec![MaximizerNode::new, ChanceNode::new];
 
         for (i, policy) in agent.policies().iter().enumerate() {
             let expected_policy = &expected_policies[i];
@@ -1057,17 +1057,68 @@ mod tests {
 
     #[test]
     fn expectimax_agent_created_correctly_with_max_depth() {
-        let agent = AdversarialSearchAgent::<LinearPacManState>::expectimax(vec!['P', 'G'], Some(5));
+        let max_depth = 5;
+        let agent = AdversarialSearchAgent::<TestGameState>::expectimax(
+            vec![TestGameAgent::Player, TestGameAgent::Adversary],
+            Some(max_depth)
+        );
 
         assert_eq!(agent.n_policies(), 2);
-        assert_eq!(agent.max_depth(), Some(5));
+        assert_eq!(agent.max_depth(), Some(max_depth));
 
-        let expected_policies: Vec<NodeConstructor<LinearPacManState>> = vec![MaximizerNode::new, ChanceNode::new];
+        let expected_policies: Vec<NodeConstructor<TestGameState>> = vec![MaximizerNode::new, ChanceNode::new];
 
         for (i, policy) in agent.policies().iter().enumerate() {
             let expected_policy = &expected_policies[i];
             assert!(policy.node() == *expected_policy);
         }
+    }
+
+    #[test]
+    fn custom_policy_agent_created_correctly_no_max_depth() {
+        let agent = AdversarialSearchAgent::<TestGameState>::new(
+            vec![AdversarialSearchPolicy::new(TestGameAgent::Player, ChanceNode::new), AdversarialSearchPolicy::new(TestGameAgent::Adversary, MinimizerNode::new)],
+            None
+        );
+
+        assert_eq!(agent.n_policies(), 2);
+        assert_eq!(agent.max_depth(), None);
+
+        let expected_policies: Vec<NodeConstructor<TestGameState>> = vec![ChanceNode::new, MinimizerNode::new];
+
+        for (i, policy) in agent.policies().iter().enumerate() {
+            let expected_policy = &expected_policies[i];
+            assert!(policy.node() == *expected_policy);
+        }
+    }
+
+    #[test]
+    fn custom_policy_agent_created_correctly_with_max_depth() {
+        let max_depth = 5;
+        let agent = AdversarialSearchAgent::<TestGameState>::new(
+            vec![AdversarialSearchPolicy::new(TestGameAgent::Player, ChanceNode::new), AdversarialSearchPolicy::new(TestGameAgent::Adversary, MinimizerNode::new)],
+            Some(max_depth)
+        );
+
+        assert_eq!(agent.n_policies(), 2);
+        assert_eq!(agent.max_depth(), Some(max_depth));
+
+        let expected_policies: Vec<NodeConstructor<TestGameState>> = vec![ChanceNode::new, MinimizerNode::new];
+
+        for (i, policy) in agent.policies().iter().enumerate() {
+            let expected_policy = &expected_policies[i];
+            assert!(policy.node() == *expected_policy);
+        }
+    }
+/*
+    #[test]
+    fn minimax_agent_adv_search_returns_correct_result_no_max_depth() {
+
+    }
+
+    #[test]
+    fn minimax_agent_adv_search_returns_correct_result_with_max_depth() {
+        // TODO
     }
 
     #[test]
@@ -1092,7 +1143,7 @@ mod tests {
 
     #[test]
     fn terminal_node_created_correctly() {
-        let state = LinearPacManState::new();
+        let state = TestGameState::new();
         let node = TerminalNode::new(state.clone());
 
         assert_eq!(*(node.state()), state);
@@ -1105,7 +1156,7 @@ mod tests {
 
     #[test]
     fn terminal_node_utility_calculated_correctly() {
-        let state = LinearPacManState::new();
+        let state = TestGameState::new();
         let node = TerminalNode::new(state.clone());
 
         let (utility, action) = node.utility();
@@ -1116,9 +1167,9 @@ mod tests {
 
     #[test]
     fn min_node_created_correctly() {
-        let state = LinearPacManState::new();
+        let state = TestGameState::new();
         let agent = 'P';
-        let successors: Vec<AdversarialSearchSuccessor<LinearPacManState>> = state.actions(agent).iter().map(
+        let successors: Vec<AdversarialSearchSuccessor<TestGameState>> = state.actions(agent).iter().map(
             |a| AdversarialSearchSuccessor::new(
                 *a,
                 TerminalNode::new(state.successor(agent, *a))
@@ -1134,7 +1185,7 @@ mod tests {
 
     #[test]
     fn min_node_utility_correct_one_successor() {
-        let state = LinearPacManState::new();
+        let state = TestGameState::new();
 
         let agent = 'P';
         let action = 1;
@@ -1156,7 +1207,7 @@ mod tests {
 
     #[test]
     fn min_node_utility_correct_many_successors_no_tie() {
-        let state = LinearPacManState::new();
+        let state = TestGameState::new();
 
         let agent = 'P';
         let successors = vec![
@@ -1179,9 +1230,9 @@ mod tests {
 
     #[test]
     fn min_node_utility_correct_many_successors_tie() {
-        let state = LinearPacManState::new();
+        let state = TestGameState::new();
         let agent = 'P';
-        let successors: Vec<AdversarialSearchSuccessor<LinearPacManState>> = state.actions(agent).iter().map(
+        let successors: Vec<AdversarialSearchSuccessor<TestGameState>> = state.actions(agent).iter().map(
             |a| AdversarialSearchSuccessor::new(
                 *a,
                 TerminalNode::new(state.successor(agent, *a))
@@ -1201,9 +1252,9 @@ mod tests {
 
     #[test]
     fn max_node_created_correctly() {
-        let state = LinearPacManState::new();
+        let state = TestGameState::new();
         let agent = 'P';
-        let successors: Vec<AdversarialSearchSuccessor<LinearPacManState>> = state.actions(agent).iter().map(
+        let successors: Vec<AdversarialSearchSuccessor<TestGameState>> = state.actions(agent).iter().map(
             |a| AdversarialSearchSuccessor::new(
                 *a,
                 TerminalNode::new(state.successor(agent, *a))
@@ -1219,7 +1270,7 @@ mod tests {
 
     #[test]
     fn max_node_utility_correct_one_successor() {
-        let state = LinearPacManState::new();
+        let state = TestGameState::new();
 
         let agent = 'P';
         let action = 1;
@@ -1241,7 +1292,7 @@ mod tests {
 
     #[test]
     fn max_node_utility_correct_many_successors_no_tie() {
-        let state = LinearPacManState::new();
+        let state = TestGameState::new();
 
         let agent = 'P';
         let successors = vec![
@@ -1264,9 +1315,9 @@ mod tests {
 
     #[test]
     fn max_node_utility_correct_many_successors_tie() {
-        let state = LinearPacManState::new();
+        let state = TestGameState::new();
         let agent = 'P';
-        let successors: Vec<AdversarialSearchSuccessor<LinearPacManState>> = state.actions(agent).iter().map(
+        let successors: Vec<AdversarialSearchSuccessor<TestGameState>> = state.actions(agent).iter().map(
             |action| AdversarialSearchSuccessor::new(
                 *action,
                 TerminalNode::new(state.successor(agent, *action))
@@ -1286,9 +1337,9 @@ mod tests {
 
     #[test]
     fn chance_node_created_correctly() {
-        let state = LinearPacManState::new();
+        let state = TestGameState::new();
         let agent = 'P';
-        let successors: Vec<AdversarialSearchSuccessor<LinearPacManState>> = state.actions(agent).iter().map(
+        let successors: Vec<AdversarialSearchSuccessor<TestGameState>> = state.actions(agent).iter().map(
             |a| AdversarialSearchSuccessor::new(
                 *a,
                 TerminalNode::new(state.successor(agent, *a))
@@ -1304,7 +1355,7 @@ mod tests {
 
     #[test]
     fn chance_node_utility_correct_one_successor() {
-        let state = LinearPacManState::new();
+        let state = TestGameState::new();
 
         let agent = 'P';
         let action = 1;
@@ -1326,7 +1377,7 @@ mod tests {
 
     #[test]
     fn chance_node_utility_correct_many_successors() {
-        let state = LinearPacManState::new();
+        let state = TestGameState::new();
 
         let agent = 'P';
         let successors = vec![
