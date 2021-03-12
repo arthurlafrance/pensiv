@@ -1,26 +1,37 @@
-//! Adversarial search & game trees.
+//! Adversarial search & game-playing.
 //!
-//! This module provides methods for evaluating game trees through adversarial search. It's designed to allow for building
-//! game trees flexibly, and to provide a central method for evaluating these flexibly-created game trees through adversarial search.
+//! This module provides methods for using game-playing agents through adversarial search. It's designed to allow for building
+//! adversarial search trees flexibly, and to provide a central method for evaluating these flexibly-created trees through adversarial search.
 //! This is accomplished by dividing the process of adversarial search into 2 steps:
 //!
-//! NOTE: a complete example program using adversarial search is available [here](https://github.com/arthurlafrance/pensiv).
-//! See it for examples of the code in this module.
+//! NOTE: a complete example program using adversarial search is available [here](https://github.com/arthurlafrance/Pensiv).
+//! Refer to it for examples of the code in this module.
 //!
 //! ## Defining an Adversarial Search Problem
 //!
-//! Before performing adversarial search, you must define an adversarial search problem using the tools provided by `pensiv`. The bulk of the
-//! work associated with this is in defining the state representation for the problem. You must define a type that implements the
-//! `AdversarialSearchState` trait which represents the state of the search problem, and in the process specify associated types representing
-//! the agents, actions, and utility. After doing so, you'll be ready to perform adversarial search based on the defined state.
+//! Before performing adversarial search, you must define an adversarial search problem using the tools provided by `pensiv`. This
+//! mainly entails defining the state representation for the problem. You must define a type that implements the
+//! `AdversarialSearchState` trait which represents the state of the search problem. After doing so, you'll be ready to perform adversarial search based on the defined state.
 //!
 //! ## Performing Adversarial Search
 //!
 //! After defining a state representation, you can then perform adversarial search based on it. To do this, create an `AdversarialSearchAgent`
-//! by defining a configuration for the game tree, either using minimax and expectimax or by specifying a custom configuration using the various
-//! nodes' constructor functions. After creating the agent, simply call the `optimal_action()` method to determine the optimal action for the
+//! by defining a configuration for the game tree, either using minimax, "max-n" and expectimax or by specifying a custom configuration using the various
+//! node constructor functions. After creating the agent, simply call the `optimal_action()` method to determine the optimal action for the
 //! agent to take given some start state.
 //!
+//! ## Extensions
+//!
+//! The flexibility of `pensiv`'s adversarial search implementation makes it easy to extend if the existing implementation
+//! doesn't quite fit your needs. There are two main ways to extend this module:
+//! 1. Custom adversarial search nodes: While this module provides certain common node types out-of-the-box, it obviously can't
+//! provide every possible node type imaginable. For that reason, it provides a flexible base trait, `AdversarialSearchNode`, which can be
+//! implemented for any custom node type you may wish to define. In this way, you can bring customized functionality to your specific application
+//! of adversarial search.
+//! 2. Custom adversarial search tree configurations: In much the same way as the previous point, this module provides common configurations of
+//! adversarial search trees (e.g. minimax), while also introducing the flexibility to define custom configurations that can be tailored to each
+//! specific application of adversarial search. If the provided configurations aren't what you're looking for, you can use the custom constructor of
+//! `AdversarialSearchAgent` to assign each layer (or equivalently, each agent in the game) to some arbitrary node type (including types not provided out-of-the-box).
 
 
 use num_traits::Float;
@@ -31,7 +42,7 @@ use std::marker::PhantomData;
 
 /// An agent that performs adversarial search.
 ///
-/// `AdversarialSearchAgent` is parameterized by the type `State`, which represents the state of the adversarial search problem and must
+/// `AdversarialSearchAgent` is parameterized by the type parameter `State`, which represents the state of the adversarial search problem and must
 /// implement `AdversarialSearchState`.
 pub struct AdversarialSearchAgent<'a, State: AdversarialSearchState> {
     policies: Vec<AdversarialSearchPolicy<'a, State>>,
