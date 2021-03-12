@@ -170,6 +170,7 @@ impl<'a, State: 'a + AdversarialSearchState> AdversarialSearchAgent<'a, State> {
 
 
 /// A policy in adversarial search: an agent and the node type that models it.
+#[derive(Debug)]
 pub struct AdversarialSearchPolicy<'a, State: AdversarialSearchState> {
     agent: State::Agent,
     node: fn(State, Vec<AdversarialSearchSuccessor<'a, State>>) -> Box<dyn AdversarialSearchNode<'a, State> + 'a>,
@@ -263,7 +264,7 @@ impl<'a, State: AdversarialSearchState> AdversarialSearchSuccessor<'a, State> {
 
     /// Return a reference to the child node.
     pub fn node(&self) -> &dyn AdversarialSearchNode<'a, State> {
-        &(*(self.node)) // NOTE: this is kinda jank syntactically, is it acceptable?
+        &*self.node
     }
 }
 
@@ -278,15 +279,6 @@ pub trait AdversarialSearchNode<'a, State: AdversarialSearchState> {
     ///
     /// This method is typically simply an accessor method of the node's internal state field.
     fn state(&self) -> &State;
-
-    /// Returns a reference to a vector containing the node's successors (i.e. child nodes), if they exist.
-    ///
-    /// Returns `None` if the node has no successors, otherwise return a reference to them.
-    ///
-    /// Note that a node's successors don't need to be of the same type; as long as they use the same state as this node,
-    /// they're valid successors. As a concrete example, this means that a minimizer node can have maximizer nodes as its
-    /// successors, as long as all nodes are generic to the same state.
-    fn successors(&self) -> Option<&Vec<AdversarialSearchSuccessor<'a, State>>>;
 
     /// Returns the node's utility and the action required to achieve that utility, if it exists.
     ///
@@ -321,11 +313,6 @@ impl<'a, State: AdversarialSearchState> AdversarialSearchNode<'a, State> for Ter
         &self.state
     }
 
-    /// Return an optional reference to a vector containing the node's successors. Since this node is terminal, always returns `None`.
-    fn successors(&self) -> Option<&Vec<AdversarialSearchSuccessor<'a, State>>> {
-        None
-    }
-
     /// Determine and return the utility of the node, and return the action required to achieve that utility, if it exists.
     ///
     /// Since this node is terminal, the returned utility is the utility of the node's state as determined by the state's evaluation function; the
@@ -347,7 +334,7 @@ pub struct MinimizerNode<'a, State: AdversarialSearchState> where State::Utility
 
 impl<'a, State: 'a + AdversarialSearchState> MinimizerNode<'a, State> where State::Utility: PartialOrd {
     /// Creates and returns a new minimizer node for the given state & successors.
-    pub fn new(state: State, successors: Vec<AdversarialSearchSuccessor<'a, State>>) -> Box<dyn AdversarialSearchNode<'a, State> + 'a> {
+    fn new(state: State, successors: Vec<AdversarialSearchSuccessor<'a, State>>) -> Box<dyn AdversarialSearchNode<'a, State> + 'a> {
         Box::new(MinimizerNode { state, successors })
     }
 }
@@ -355,10 +342,6 @@ impl<'a, State: 'a + AdversarialSearchState> MinimizerNode<'a, State> where Stat
 impl<'a, State: AdversarialSearchState> AdversarialSearchNode<'a, State> for MinimizerNode<'a, State> where State::Utility: PartialOrd {
     fn state(&self) -> &State {
         &self.state
-    }
-
-    fn successors(&self) -> Option<&Vec<AdversarialSearchSuccessor<'a, State>>> {
-        Some(&self.successors)
     }
 
     /// Determines and returns the utility of the node and the action required to achieve that utility.
@@ -400,7 +383,7 @@ pub struct MaximizerNode<'a, State: AdversarialSearchState> where State::Utility
 
 impl<'a, State: 'a + AdversarialSearchState> MaximizerNode<'a, State> where State::Utility: PartialOrd {
     /// Creates and returns a new maximizer node for the given state & successors.
-    pub fn new(state: State, successors: Vec<AdversarialSearchSuccessor<'a, State>>) -> Box<dyn AdversarialSearchNode<'a, State> + 'a> {
+    fn new(state: State, successors: Vec<AdversarialSearchSuccessor<'a, State>>) -> Box<dyn AdversarialSearchNode<'a, State> + 'a> {
         Box::new(MaximizerNode { state, successors })
     }
 }
@@ -408,10 +391,6 @@ impl<'a, State: 'a + AdversarialSearchState> MaximizerNode<'a, State> where Stat
 impl<'a, State: AdversarialSearchState> AdversarialSearchNode<'a, State> for MaximizerNode<'a, State> where State::Utility: PartialOrd {
     fn state(&self) -> &State {
         &self.state
-    }
-
-    fn successors(&self) -> Option<&Vec<AdversarialSearchSuccessor<'a, State>>> {
-        Some(&self.successors)
     }
 
     /// Determines and returns the utility of the node and the action required to achieve that utility.
@@ -456,7 +435,7 @@ pub struct ChanceNode<'a, State: AdversarialSearchState> where State::Utility: F
 
 impl<'a, State: 'a + AdversarialSearchState> ChanceNode<'a, State> where State::Utility: Float {
     /// Creates and returns a new chance node for the given state & successors.
-    pub fn new(state: State, successors: Vec<AdversarialSearchSuccessor<'a, State>>) -> Box<dyn AdversarialSearchNode<'a, State> + 'a> {
+    fn new(state: State, successors: Vec<AdversarialSearchSuccessor<'a, State>>) -> Box<dyn AdversarialSearchNode<'a, State> + 'a> {
         Box::new(ChanceNode { state, successors })
     }
 }
@@ -464,10 +443,6 @@ impl<'a, State: 'a + AdversarialSearchState> ChanceNode<'a, State> where State::
 impl<'a, State: AdversarialSearchState> AdversarialSearchNode<'a, State> for ChanceNode<'a, State> where State::Utility: Float {
     fn state(&self) -> &State {
         &self.state
-    }
-
-    fn successors(&self) -> Option<&Vec<AdversarialSearchSuccessor<'a, State>>> {
-        Some(&self.successors)
     }
 
     /// Determines and returns the utility of the node. `None` is returned for the action because chance nodes predict only the expected utility, not an action to take.
