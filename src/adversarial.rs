@@ -146,11 +146,9 @@ impl<'a, State: 'a + AdversarialSearchState> AdversarialSearchAgent<'a, State> {
     /// One important note is that performing adversarial search with no maximum depth may lead to infinite recursion, if there exists
     /// some way to transition between states in a cycle. (Think of this as a cyclic state space graph, which would obviously result in a never-ending tree).
     /// Thus, be cognizant of this risk, and use infinite-depth adversarial search at your own risk.
-    pub fn optimal_action(&self, state: State) -> Option<State::Action> {
+    pub fn eval(&self, state: State) -> (State::Utility, Option<State::Action>) {
         let root = self.make_node(state, 0, 0);
-        let (_, action) = root.eval();
-
-        action
+        root.eval()
     }
 
     fn make_node(&self, state: State, policy_index: usize, depth: usize) -> Box<dyn AdversarialSearchNode<'a, State> + 'a> {
