@@ -76,15 +76,27 @@ impl<'a, State: 'a + AdversarialSearchState> AdversarialSearchAgent<'a, State> {
     /// Note that, just as the policies in the `new()` function appear in the vector in the order that they're evaluated, so too do the agents
     /// in the `agents` vector parameter. The player agent should appear first, and adversary agents should appear in whatever order you wish to
     /// evaluate them.
+    /// IMPORTANT NOTE: state must return the same utility for both agents, otherwise minimax breaks
     pub fn minimax(agents: Vec<State::Agent>, max_depth: Option<usize>) -> AdversarialSearchAgent<'a, State> where State::Utility: PartialOrd {
+        let n_policies = agents.len();
+
+        if n_policies != 2 {
+            panic!("minimax must have exactly 2 agents, not {}", n_policies);
+        }
+
+        let agent_policy = AdversarialSearchPolicy::new(agents[0], MaximizerNode::new);
+        let adversary_policy = AdversarialSearchPolicy::new(agents[1], MinimizerNode::new);
+        let policies = vec![agent_policy, adversary_policy];
+
+        AdversarialSearchAgent { policies, n_policies, max_depth }
+    }
+
+    pub fn max_n(agents: Vec<State::Agent>, max_depth: Option<usize>) -> AdversarialSearchAgent<'a, State> where State::Utility: PartialOrd {
         let n_policies = agents.len();
         let mut policies = Vec::with_capacity(n_policies);
 
-        let agent_policy = AdversarialSearchPolicy::new(agents[0], MaximizerNode::new);
-        policies.push(agent_policy);
-
-        for agent in agents[1..].iter() {
-            let policy = AdversarialSearchPolicy::new(*agent, MinimizerNode::new);
+        for agent in agents.iter() {
+            let policy = AdversarialSearchPolicy::new(*agent, MaximizerNode::new);
             policies.push(policy);
         }
 
@@ -145,7 +157,7 @@ impl<'a, State: 'a + AdversarialSearchState> AdversarialSearchAgent<'a, State> {
     ///
     /// One important note is that performing adversarial search with no maximum depth may lead to infinite recursion, if there exists
     /// some way to transition between states in a cycle. (Think of this as a cyclic state space graph, which would obviously result in a never-ending tree).
-    /// Thus, be cognizant of this risk, and use infinite-depth adversarial search at your own risk.
+    /// Thus, be cognizant of this, and use infinite-depth adversarial search at your own risk.
     pub fn eval(&self, state: State) -> (State::Utility, Option<State::Action>) {
         let root = self.make_node(state, 0, 0);
         root.eval()
