@@ -148,22 +148,22 @@ impl<'a, State: 'a + AdversarialSearchState> AdversarialSearchAgent<'a, State> {
     /// Thus, be cognizant of this risk, and use infinite-depth adversarial search at your own risk.
     pub fn optimal_action(&self, state: State) -> Option<State::Action> {
         let root = self.make_node(state, 0, 0);
-        let (_, action) = root.utility();
+        let (_, action) = root.eval();
 
         action
     }
 
     fn make_node(&self, state: State, policy_index: usize, depth: usize) -> Box<dyn AdversarialSearchNode<'a, State> + 'a> {
+        let policy = &self.policies[policy_index];
+        let agent = policy.agent();
+
         // if node should be terminal, make terminal
         // else, make according to policy and add successors
         if state.is_terminal() || (self.max_depth != None && depth == self.max_depth.unwrap()) {
-            TerminalNode::new(state)
+            TerminalNode::new(state, agent)
         }
         else {
             let mut successors = vec![];
-
-            let policy = &self.policies[policy_index];
-            let agent = policy.agent();
             let node_constructor = policy.node();
 
             for action in state.actions(agent).iter() {
@@ -240,10 +240,12 @@ pub trait AdversarialSearchState {
     /// violation of this precondition is undefined behavior, and can be handled at the developer's discretion.
     fn successor(&self, agent: Self::Agent, action: Self::Action) -> Self;
 
-    /// Returns the utility of the current state according to the evaluation function.
+    /// Returns the evaluation function value of the current state for the specified agent.
     ///
-    /// Use this function to define a custom evaluation function by which to determine the utility of a custom state.
-    fn eval(&self) -> Self::Utility;
+    /// For terminal states, this should be the utility of the state for the given agent (i.e. their "score").
+    /// For non-terminal states, this should be a heuristic estimate of the state's utility for the given agent, i.e. your
+    /// best guess of their score.
+    fn eval(&self, agent: Self::Agent) -> Self::Utility;
 
     /// Returns `true` if the state is a terminal state, `false` otherwise.
     ///
@@ -299,7 +301,7 @@ pub trait AdversarialSearchNode<'a, State: AdversarialSearchState> {
     /// How a node's utility is calculated is determined by the type of node in this method. For example, minimizer nodes
     /// will minimize the utility of their successors; maximizer nodes do the opposite. Thus, this method is how to determine
     /// the method by which a node calculates its own usility, potentially relative to its successors' utility.
-    fn utility(&self) -> (State::Utility, Option<State::Action>);
+    fn eval(&self) -> (State::Utility, Option<State::Action>);
 }
 
 
@@ -309,13 +311,14 @@ pub trait AdversarialSearchNode<'a, State: AdversarialSearchState> {
 /// the game tree; third-party users can't (and shouldn't) create artibitrary terminal nodes in the game tree, therefore this functionality is not publicly exposed.
 struct TerminalNode<'a, State: AdversarialSearchState> {
     state: State,
+    agent: State::Agent,
     _phantom: PhantomData<&'a i32>,
 }
 
 impl<'a, State: 'a + AdversarialSearchState> TerminalNode<'a, State> {
     /// Creates and returns a new terminal node for the given state.
-    fn new(state: State) -> Box<dyn AdversarialSearchNode<'a, State> + 'a> {
-        Box::new(TerminalNode { state, _phantom: PhantomData })
+    fn new(state: State, agent: State::Agent) -> Box<dyn AdversarialSearchNode<'a, State> + 'a> {
+        Box::new(TerminalNode { state, agent, _phantom: PhantomData })
     }
 }
 
@@ -328,8 +331,8 @@ impl<'a, State: AdversarialSearchState> AdversarialSearchNode<'a, State> for Ter
     ///
     /// Since this node is terminal, the returned utility is the utility of the node's state as determined by the state's evaluation function; the
     /// returned action is always `None`.
-    fn utility(&self) -> (State::Utility, Option<State::Action>) {
-        (self.state.eval(), None)
+    fn eval(&self) -> (State::Utility, Option<State::Action>) {
+        (self.state.eval(self.agent), None)
     }
 }
 
@@ -362,14 +365,14 @@ impl<'a, State: AdversarialSearchState> AdversarialSearchNode<'a, State> for Min
     /// terminal.
     ///
     /// Note that this method returns the _first_ action that achieves optimal utility, that is, in the event of a tie, the optimal action is not changed.
-    fn utility(&self) -> (State::Utility, Option<State::Action>) {
+    fn eval(&self) -> (State::Utility, Option<State::Action>) {
         let successor = &self.successors[0];
 
-        let (mut min_utility, _) = successor.node().utility();
+        let (mut min_utility, _) = successor.node().eval();
         let mut optimal_action = successor.action();
 
         for successor in self.successors[1..].iter() {
-            let (utility, _) = successor.node().utility();
+            let (utility, _) = successor.node().eval();
             let action = successor.action();
 
             if utility < min_utility {
@@ -411,14 +414,14 @@ impl<'a, State: AdversarialSearchState> AdversarialSearchNode<'a, State> for Max
     /// terminal.
     ///
     /// Note that this method returns the _first_ action that achieves optimal utility, that is, in the event of a tie, the optimal action is not changed.
-    fn utility(&self) -> (State::Utility, Option<State::Action>) {
+    fn eval(&self) -> (State::Utility, Option<State::Action>) {
         let successor = &self.successors[0];
 
-        let (mut max_utility, _) = successor.node().utility();
+        let (mut max_utility, _) = successor.node().eval();
         let mut optimal_action = successor.action();
 
         for successor in self.successors[1..].iter() {
-            let (utility, _) = successor.node().utility();
+            let (utility, _) = successor.node().eval();
             let action = successor.action();
 
             if utility > max_utility {
@@ -460,12 +463,12 @@ impl<'a, State: AdversarialSearchState> AdversarialSearchNode<'a, State> for Cha
     ///
     /// For chance nodes, utility is defined as the expected utility between the node's successors according to a uniform probability distribution. (Also note that chance nodes are guaranteed to
     /// have successors because they aren't `TerminalNode`s).
-    fn utility(&self) -> (State::Utility, Option<State::Action>) {
+    fn eval(&self) -> (State::Utility, Option<State::Action>) {
         let mut total_utility = State::Utility::zero();
         let mut n_successors = State::Utility::zero();
 
         for successor in self.successors.iter() {
-            let (utility, _) = successor.node().utility();
+            let (utility, _) = successor.node().eval();
 
             // Can't use += because of the lack of additional trait requirement
             total_utility = total_utility + utility;
