@@ -3,6 +3,8 @@
 //! Currently implemented are the properties of several common discrete and continuous distributions, as well as the
 //! basic combinatorics required to implement them.
 
+mod utils;
+
 use ndarray::prelude::*;
 use ndarray::Array;
 
@@ -12,7 +14,7 @@ use num_traits::identities;
 use std::collections::BTreeMap;
 use std::f64::consts::PI;
 
-use crate::utils::ComparableFloat;
+use utils::ComparableFloat;
 
 /// Returns n!.
 ///
@@ -47,7 +49,7 @@ pub fn choose(n: i32, k: i32) -> i32 {
 
 /// Returns the error function of x.
 ///
-/// The error function is approximated using a formula from the book _*Abramowitz and Stegun*_, which approximates the
+/// The error function is approximated using a formula from the book _Abramowitz and Stegun_, which approximates the
 /// function with a maximum error of `1.5e-7`.
 pub fn erf(mut x: f64) -> f64 {
     let parity = if x > 0.0 { 1.0 } else { -1.0 };
