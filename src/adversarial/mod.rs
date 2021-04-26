@@ -511,230 +511,136 @@ mod tests {
     use std::fmt::{Display, Formatter, Result as FmtResult};
     use std::str::FromStr;
 
-    // new test "game":
-        // simple game with two agents on a board where each spot has a numeric value
-        // a collision between player & adversary ends the game
-        // the player can:
-            // move one spot right on the board
-            // "call it" at any time, ie end the game at the current state
-        // possible adversary movements:
-            // move one spot left deterministically
-            // move either left or right uniformly at random (how to make non-cyclic in this case?)
-        // at the end of the game, the player's score is the numeric value of the spot that they're on
-        // possible test cases by board config:
-            // player moves forward to best spot and ends game
-            // player moves forward to best spot that won't cause collision and ends game (even if that's not the global maximum value spot)
-            // player chooses not to move
-            // etc
-
-    // TODO: set up adversarial search
+    // ok new test search problem idea:
+        // given n players (1 agent + (n - 1) adversaries), say there are 3n - 1 "bins", each of which stores some number
+        // each player is given some "cards", each of which has a numerical value
+        // on any player's turn, they can choose to place their card on top of one of the bins
+        //   only if it's greater than the value of the current top card (maybe add more actions idk)
+        // another potential action: allow for splitting a card in half -- can split a card into two cards whose values sum to the original card's value, roughly splitting it in half
+        // game ends when no players have cards left -- each player's score is the sum of the values of all of their cards on
+        //   top of a bin
+    // good because it's deterministic, always has a fixed depth, and can be extended to an arbitrary number of players
 
     struct TestGameState {
-        player_pos: usize,
-        adversary_pos: usize,
-
-        player_score: u32,
-        adversary_score: u32,
-
-        max_pos: usize,
-        board: Vec<u32>,
+        cards: Vec<Vec<bool>>, // true means still available to use
+        remaining_cards: Vec<usize>,
+        bins: Vec<(usize, usize)>, // format is (player, card value)
     }
 
     impl TestGameState {
-        fn start(board: Vec<u32>) -> TestGameState {
-            let max_pos = board.len() - 1;
+        const N_CARDS: usize = 6;
+
+        fn start(n_players: usize) -> TestGameState {
+            if n_players == 0 {
+                panic!("must have at least one player");
+            }
+
+            let n_bins = 3 * n_players - 1;
 
             TestGameState {
-                player_pos: max_pos / 4usize, adversary_pos: max_pos * 3usize / 4usize,
-                player_score: 0, adversary_score: 0,
-                max_pos, board
+                cards: vec![vec![true; TestGameState::N_CARDS]; n_players],
+                remaining_cards: vec![TestGameState::N_CARDS; n_players],
+                bins: vec![(0, 0); n_bins]
             }
         }
 
-        fn new(player_pos: usize, adversary_pos: usize, player_score: u32, adversary_score: u32, board: Vec<u32>) -> TestGameState {
-            let max_pos = board.len() - 1;
-
-            TestGameState {
-                player_pos, adversary_pos,
-                player_score, adversary_score,
-                max_pos, board
-            }
-        }
-
-        fn player_pos(&self) -> usize {
-            self.player_pos
-        }
-
-        fn adversary_pos(&self) -> usize {
-            self.adversary_pos
-        }
-
-        fn player_score(&self) -> u32 {
-            self.player_score
-        }
-
-        fn adversary_score(&self) -> u32 {
-            self.adversary_score
-        }
-
-        fn board(&self) -> &[u32] {
-            &self.board
-        }
-
-        fn player_spot(&self) -> u32 {
-            self.board[self.player_pos]
-        }
-
-        fn adversary_spot(&self) -> u32 {
-            self.board[self.adversary_pos]
-        }
-    }
-
-    #[derive(Debug, PartialEq, Clone, Copy)]
-    enum TestGameAgent {
-        Player,
-        Adversary,
-    }
-
-    #[derive(Debug, PartialEq, Clone, Copy)]
-    enum TestGameAction {
-        Left(usize),
-        Right(usize),
-        Peek, // only valid when you have no other moves
-    }
-
-    impl AdversarialSearchState for TestGameState {
-        type Action = TestGameAction;
-        type Agent = TestGameAgent;
-        type Utility = f64;
-
-        fn actions(&self, agent: TestGameAgent) -> Vec<TestGameAction> {
-            if self.is_terminal() {
-                return vec![];
-            }
-
-            let mut actions = Vec::with_capacity(3);
-
-            let pos = match agent {
-                TestGameAgent::Player => self.player_pos,
-                TestGameAgent::Adversary => self.adversary_pos,
-            };
-
-            if pos > 0 {
-                let mut left_neighbor = pos - 1;
-
-                while self.board[left_neighbor] <= 0 {
-                    if left_neighbor > 0 {
-                        left_neighbor -= 1;
-                    }
-                    else {
-                        break;
-                    }
-                }
-
-                if self.board[left_neighbor] > 0 {
-                    let action = TestGameAction::Left(pos - left_neighbor);
-
-                    actions.push(action);
-                }
-            }
-
-            if pos < self.max_pos {
-                let mut right_neighbor = pos + 1;
-
-                while right_neighbor <= self.max_pos && self.board[right_neighbor] <= 0 {
-                    right_neighbor += 1;
-                }
-
-                if right_neighbor <= self.max_pos {
-                    let action = TestGameAction::Right(right_neighbor - pos);
-                    actions.push(action);
-                }
-            }
-
-            if actions.len() == 0 {
-                actions.push(TestGameAction::Peek);
-            }
-
-            actions
-        }
-
-        fn successor(&self, agent: TestGameAgent, action: TestGameAction) -> TestGameState {
-            let mut player_pos = self.player_pos;
-            let mut adversary_pos = self.adversary_pos;
-            let mut player_score = self.player_score;
-            let mut adversary_score = self.adversary_score;
-
-            let pos;
-            let score;
-            let mut board = self.board.clone();
-
-            match agent {
-                TestGameAgent::Player => {
-                    pos = &mut player_pos;
-                    score = &mut player_score;
-                },
-                TestGameAgent::Adversary => {
-                    pos = &mut adversary_pos;
-                    score = &mut adversary_score;
-                },
-            };
-
-            *score += board[*pos];
-            board[*pos] = 0;
-
-            match action {
-                TestGameAction::Left(dx) => {
-                    *pos -= dx;
-                },
-                TestGameAction::Right(dx) => {
-                    *pos += dx;
-                },
-                TestGameAction::Peek => {},
-            };
-
-            if player_pos == adversary_pos {
-                // if they collide, adversary "eats" player
-                adversary_score += player_score;
-                player_score = 0;
-            }
-
-            TestGameState { player_pos, adversary_pos, player_score, adversary_score, max_pos: self.max_pos, board }
-        }
-
-        fn eval(&self) -> f64 {
-            self.player_score as f64 - self.adversary_score as f64
-        }
-
-        fn is_terminal(&self) -> bool {
-            self.player_pos == self.adversary_pos || self.board.iter().all(|&spot| spot <= 0)
+        fn new(cards: Vec<Vec<bool>>, remaining_cards: Vec<usize>, bins: Vec<(usize, usize)>) -> TestGameState {
+            TestGameState { cards, remaining_cards, bins }
         }
     }
 
     impl Display for TestGameState {
         fn fmt(&self, f: &mut Formatter) -> FmtResult {
-            let mut board_str = String::from_str("[ ").unwrap();
+            // write bins
+            write!(f, "Bins: {:?}\n\n", self.bins)?;
 
-            for (i, v) in self.board.iter().enumerate() {
-                board_str.push_str(format!("{}", v).as_str());
+            // write each player's remaining cards
+            for (player, cards) in self.cards.iter().enumerate() {
+                write!(f, "P{} remaining: ", player + 1)?;
 
-                if i == self.player_pos {
-                    board_str.push_str("(P)");
+                for (card, available) in cards.iter().enumerate() {
+                    if *available {
+                        write!(f, "{}", card + 1)?;
+                    }
+                    else {
+                        write!(f, "_")?;
+                    }
+
+                    write!(f, " ")?;
                 }
-                else if i == self.adversary_pos {
-                    board_str.push_str("(A)");
-                }
 
-                board_str.push_str(" ");
+                write!(f, "\n")?;
             }
 
-            board_str.push_str("]");
-            write!(f, "{}", board_str)
+            Ok(())
+        }
+    }
+
+    impl AdversarialSearchState for TestGameState {
+        type Action = TestGameAction;
+        type Utility = usize;
+
+        fn n_agents(&self) -> usize {
+            self.cards.len()
+        }
+
+        fn is_terminal(&self) -> bool {
+            self.remaining_cards.iter().copied().any(|cards_left| cards_left > 0)
+        }
+
+        fn actions(&self, agent: usize) -> Vec<TestGameAction> {
+            if agent > self.n_agents() - 1 {
+                panic!("invalid agent (ID too large)");
+            }
+
+            //
+
+            self.cards[agent].iter().copied()
+                .enumerate() // add index to iterator
+                .filter(|(_, card)| *card) // filter for only available cards
+                .map(|(val, _)| val) // extract index only
+                .collect() // collect into vector
+        }
+
+        fn successor(&self, agent: usize, action: usize) -> TestGameState {
+            if agent > self.n_agents() - 1 {
+                panic!("invalid agent (ID too large)");
+            }
+
+            if action > TestGameState::N_CARDS - 1 {
+                panic!("invalid action (too large)");
+            }
+
+            // validate that agent can actually take that action
+            if !self.cards[agent][action] {
+                panic!("card already used for agent");
+            }
+
+            // clone cards, remaining_cards, bins
+            let mut cards = self.cards.clone();
+            let mut remaining_cards = self.remaining_cards.clone();
+            let mut bins = self.bins.clone();
+
+            // modify game state & return successor
+            cards[agent][action] = false;
+            remaining_cards[agent] -= 1;
+            bins[]
+        }
+    }
+
+    struct TestGameAction {
+        pub bin: usize,
+        pub card: usize,
+    }
+
+    impl TestGameAction {
+        pub fn new(bin: usize, card: usize) -> TestGameAction {
+            TestGameAction { bin, card }
         }
     }
 
     type NodeConstructor<'a, State> = fn(State, Vec<AdversarialSearchSuccessor<'a, State>>) -> Box<dyn AdversarialSearchNode<'a, State>>;
-
+/*
     #[test]
     fn teststate_player_both_actions_returned_when_valid() {
         let board: Vec<u32> = vec![4, 2, 5, 1, 2, 3];
@@ -1123,7 +1029,7 @@ mod tests {
             assert!(policy.node() == *expected_policy);
         }
     }
-/*
+
     #[test]
     fn minimax_agent_adv_search_returns_correct_result_no_max_depth() {
 
